@@ -50,6 +50,17 @@ Coloured boxes carry hover text and link to their KEGG entry page.
 KEGG data is cached indefinitely under `--cache`; delete that directory to
 refresh.
 
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | User error — bad pathway id, unusable command line, malformed input table, unknown colormap, `--png` with `--mode vector`, offline cache miss, KEGG 404, corrupt map image |
+| `2` | Network failure with no usable cache |
+
+Exit 2 means the network, and only the network, so a script can retry on 2 and
+give up on 1.
+
 ## Scope
 
 v0.1.0 handles KO-level maps (`ko#####`) and colours `rectangle` entries only.

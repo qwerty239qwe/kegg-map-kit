@@ -180,6 +180,43 @@ def test_capped_entries_warn(tmp_path, warm_cache):
     assert "12" in err
 
 
+def test_bad_pathway_id_is_a_user_error_not_a_network_one(input_file):
+    from kegg_svg import fetch
+
+    with pytest.raises(fetch.PathwayIdError):
+        fetch.normalize_pathway("glycolysis")
+    code, _, err = invoke(["glycolysis", "-i", str(input_file), "-o", "-"])
+    assert code == 1
+    assert code != 2
+    assert "pathway id" in err
+
+
+def test_corrupt_png_exits_1(tmp_path, kgml_text, input_file):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "ko00010.kgml").write_text(kgml_text)
+    (cache / "ko00010.png").write_bytes(b"not a png at all, really not")
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(cache), "--offline"]
+    )
+    assert code == 1
+    assert "PNG" in err
+
+
+def test_missing_required_flag_exits_1(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["ko00010", "-o", "-"])
+    assert exc.value.code == 1
+    assert capsys.readouterr().err != ""
+
+
+def test_bad_mode_choice_exits_1(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["ko00010", "-i", "-", "-o", "-", "--mode", "bogus"])
+    assert exc.value.code == 1
+    assert "bogus" in capsys.readouterr().err
+
+
 def test_version_flag(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["--version"])

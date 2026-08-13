@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 from . import __version__, colormap, fetch, intable, kgml, render
 
@@ -17,8 +18,21 @@ EXIT_USER = 1
 EXIT_NETWORK = 2
 
 
+class _Parser(argparse.ArgumentParser):
+    """An ArgumentParser whose usage errors exit 1, not argparse's default 2.
+
+    Exit 2 is reserved for network failure, so a mistyped flag must not claim
+    it. `--version` and `--help` are separate actions and still exit 0.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        print(f"{self.prog}: error: {message}", file=sys.stderr)
+        raise SystemExit(EXIT_USER)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="kegg-svg",
         description="Colour a KEGG pathway map from a table of KO identifiers, as SVG.",
     )
@@ -56,17 +70,17 @@ def main(argv: list[str] | None = None, stdout=None, stderr=None) -> int:
 
     try:
         svg, stats, pathway_id = _build(args)
-    except fetch.OfflineError as exc:
-        print(f"kegg-svg: {exc}", file=err)
-        return EXIT_USER
-    except fetch.NotFoundError as exc:
+    except (
+        fetch.OfflineError,
+        fetch.NotFoundError,
+        fetch.PathwayIdError,
+        fetch.BadImageError,
+    ) as exc:
+        # Must precede the bare FetchError clause: all four are subclasses.
         print(f"kegg-svg: {exc}", file=err)
         return EXIT_USER
     except fetch.FetchError as exc:
-        # normalize_pathway also raises FetchError, and that is a user error.
-        if "not a KEGG pathway id" in str(exc):
-            print(f"kegg-svg: {exc}", file=err)
-            return EXIT_USER
+        # What is left is transport failure with no usable cache.
         print(f"kegg-svg: {exc}", file=err)
         return EXIT_NETWORK
     except (

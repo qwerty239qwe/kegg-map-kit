@@ -29,7 +29,11 @@ _urlopen = urllib.request.urlopen
 
 
 class FetchError(Exception):
-    """Any failure to obtain KEGG data."""
+    """Any failure to obtain KEGG data.
+
+    Raised bare only for transport failure. Every failure the user can act on
+    is one of the subclasses below, so callers can map exit codes by type.
+    """
 
 
 class OfflineError(FetchError):
@@ -40,10 +44,18 @@ class NotFoundError(FetchError):
     """KEGG returned 404 for the requested pathway."""
 
 
+class PathwayIdError(FetchError):
+    """The pathway id given is not a well-formed KEGG pathway id."""
+
+
+class BadImageError(FetchError):
+    """The bytes we hold for a map image are not a usable PNG."""
+
+
 def normalize_pathway(raw: str) -> str:
     match = PATHWAY_RE.match(raw.strip())
     if not match:
-        raise FetchError(
+        raise PathwayIdError(
             f"{raw!r} is not a KEGG pathway id; expected something like ko00010, "
             "map00010 or 00010"
         )
@@ -111,6 +123,6 @@ def _write_atomic(path: Path, data: bytes) -> None:
 def png_size(data: bytes) -> tuple[int, int]:
     """Read width and height out of the PNG IHDR chunk."""
     if len(data) < 24 or not data.startswith(PNG_MAGIC):
-        raise FetchError("map image is not a PNG")
+        raise BadImageError("map image is not a PNG")
     width, height = struct.unpack(">II", data[16:24])
     return (width, height)
