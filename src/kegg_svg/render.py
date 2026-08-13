@@ -16,7 +16,7 @@ import base64
 from dataclasses import dataclass
 from xml.sax.saxutils import escape, quoteattr
 
-from . import colormap, fetch, intable, kgml
+from . import colormap, fetch, intable, kgml, legend
 
 MAX_SLICES = 12
 ENTRY_URL = "https://www.kegg.jp/entry/{ko}"
@@ -254,8 +254,10 @@ def _relation_lines(pathway: kgml.Pathway) -> list[str]:
 
 
 def _legend_svg(width, height, table, opts, vmin, vmax) -> str:
-    """Filled in by Task 6."""
-    return ""
+    # A colour-mode table has no numeric scale, so a colourbar would be a lie.
+    if not opts.legend or table.mode != "value":
+        return ""
+    return legend.draw(width, height, opts.cmap, vmin, vmax)
 
 
 def _n(value: float) -> str:

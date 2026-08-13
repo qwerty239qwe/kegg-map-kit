@@ -338,3 +338,33 @@ def test_output_is_deterministic(pathway, fake_png):
     first, _ = render.render(*args, png=fake_png)
     second, _ = render.render(*args, png=fake_png)
     assert first == second
+
+
+def test_value_mode_renders_a_legend(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", legend=True),
+        png=fake_png,
+    )
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is not None
+
+
+def test_colour_mode_never_renders_a_legend(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\tred\n"),
+        render.RenderOpts(mode="raster", legend=True),
+        png=fake_png,
+    )
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is None
+
+
+def test_no_legend_option_suppresses_it(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", legend=False),
+        png=fake_png,
+    )
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is None
