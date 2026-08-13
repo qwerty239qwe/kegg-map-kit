@@ -12,8 +12,8 @@ def test_lut_has_256_entries_of_hex():
 def test_lut_endpoints_match_anchor_stops():
     table = colormap.lut("viridis")
     first, last = colormap.CMAPS["viridis"][0], colormap.CMAPS["viridis"][-1]
-    assert table[0] == "#%02x%02x%02x" % first
-    assert table[255] == "#%02x%02x%02x" % last
+    assert table[0] == f"#{first[0]:02x}{first[1]:02x}{first[2]:02x}"
+    assert table[255] == f"#{last[0]:02x}{last[1]:02x}{last[2]:02x}"
 
 
 def test_lut_is_cached_and_returns_equal_tables():

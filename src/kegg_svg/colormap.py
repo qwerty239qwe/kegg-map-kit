@@ -59,7 +59,7 @@ def lut(name: str) -> list[str]:
         frac = pos - lo
         start, end = stops[lo], stops[lo + 1]
         rgb = tuple(round(start[c] + (end[c] - start[c]) * frac) for c in range(3))
-        table.append("#%02x%02x%02x" % rgb)
+        table.append(f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}")
     _CACHE[name] = table
     return table
 
