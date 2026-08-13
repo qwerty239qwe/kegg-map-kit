@@ -42,6 +42,36 @@ def test_colormap_name_is_shown():
     assert "coolwarm" in {t.text for t in root.findall(f".//{SVG}text")}
 
 
+def test_bar_colour_matches_position_not_just_presence():
+    """vmax must be drawn at the top of the bar and vmin at the bottom.
+
+    Selects bar segments by their y attribute (not by emission order/index), so
+    the test stays honest if the emission order ever changes.
+    """
+    root = wrap(legend.draw(1000, 800, "viridis", 0.0, 1.0))
+    table = colormap.lut("viridis")
+    # Bar segments are the coloured (non-outline, non-backing) rects: width 20,
+    # a real hex fill (the outline rect has fill="none", the backing is 92 wide).
+    segments = [
+        r
+        for r in root.findall(f".//{SVG}rect")
+        if r.get("width") == "20.00" and (r.get("fill") or "").startswith("#")
+    ]
+    assert segments
+    top = min(segments, key=lambda r: float(r.get("y")))
+    bottom = max(segments, key=lambda r: float(r.get("y")))
+    assert top.get("fill") == table[255]
+    assert bottom.get("fill") == table[0]
+
+
+def test_tick_labels_sit_beside_their_end_of_the_bar():
+    """vmax's label must be above (smaller y) vmin's label, with the midpoint between."""
+    root = wrap(legend.draw(1000, 800, "coolwarm", -2.0, 2.0))
+    texts = root.findall(f".//{SVG}text")
+    y_by_text = {t.text: float(t.get("y")) for t in texts if t.text in {"-2", "0", "2"}}
+    assert y_by_text["2"] < y_by_text["0"] < y_by_text["-2"]
+
+
 def test_tiny_canvas_gets_no_legend():
     assert legend.draw(50, 40, "coolwarm", -2.0, 2.0) == ""
 
