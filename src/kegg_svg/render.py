@@ -22,6 +22,7 @@ MAX_SLICES = 12
 ENTRY_URL = "https://www.kegg.jp/entry/{ko}"
 UNMATCHED_FILL = "#ffffff"
 UNMATCHED_STROKE = "#999999"
+OUTLINE_WIDTH = "0.5"
 LABEL_SIZE = 8
 
 
@@ -172,6 +173,13 @@ def _box_svg(
             f'fill={quoteattr(piece.fill)} fill-opacity="{opacity:.2f}"/>'
         )
 
+    if opts.mode == "vector":
+        # The neutral base rect is skipped under a coloured box, so its outline
+        # has to be redrawn here or a matched box would lose the border every
+        # unmatched box keeps. Raster mode gets no outline: KEGG's own artwork
+        # already draws the borders and must not be overpainted.
+        parts.append(_outline(box))
+
     label = entry.label or ",".join(entry.ko_ids)
     tip = escape(f"{label} — " + "; ".join(p.tip for p in slices))
     group = f"<g><title>{tip}</title>{''.join(parts)}</g>"
@@ -199,9 +207,18 @@ def _vector_base_boxes(pathway: kgml.Pathway, coloured: set[str]) -> list[str]:
         out.append(
             f'<rect x="{_n(box.x)}" y="{_n(box.y)}" width="{_n(box.w)}" '
             f'height="{_n(box.h)}" fill="{UNMATCHED_FILL}" fill-opacity="1.00" '
-            f'stroke="{UNMATCHED_STROKE}" stroke-width="0.5"/>'
+            f'stroke="{UNMATCHED_STROKE}" stroke-width="{OUTLINE_WIDTH}"/>'
         )
     return out
+
+
+def _outline(box: kgml.Box) -> str:
+    """The border a base rect would have drawn, without its opaque fill."""
+    return (
+        f'<rect x="{_n(box.x)}" y="{_n(box.y)}" width="{_n(box.w)}" '
+        f'height="{_n(box.h)}" fill="none" fill-opacity="1.00" '
+        f'stroke="{UNMATCHED_STROKE}" stroke-width="{OUTLINE_WIDTH}"/>'
+    )
 
 
 def _vector_labels(pathway: kgml.Pathway) -> list[str]:

@@ -26,6 +26,16 @@ def overlay_rects(svg_text):
     return group.findall(f".//{SVG}rect") if group is not None else []
 
 
+def split_rects(svg_text):
+    """Split every rect into (outside the overlay group, inside it)."""
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    inside = group.findall(f".//{SVG}rect") if group is not None else []
+    seen = {id(r) for r in inside}
+    outside = [r for r in root.findall(f".//{SVG}rect") if id(r) not in seen]
+    return outside, inside
+
+
 @pytest.fixture
 def pathway(kgml_text):
     return kgml.parse(kgml_text)
@@ -148,8 +158,33 @@ def test_unmatched_entries_are_not_drawn_in_raster(pathway, fake_png):
 
 def test_vector_draws_every_box_including_unmatched(pathway):
     svg, _ = render.render(pathway, parse_table("K00844\tred\n"), render.RenderOpts(mode="vector"))
-    # Three rectangle entries in the fixture: ids 1, 2 and 5.
-    assert len(rects(svg)) == 3
+    outside, inside = split_rects(svg)
+    # Entries 2 (x=528) and 5 (x=177) are unmatched and get a neutral base each.
+    assert [r.get("x") for r in outside] == ["528.00", "177.00"]
+    # Entry 1 (x=714) is matched, so it is drawn by the overlay instead, once.
+    slices = [r for r in inside if r.get("fill") != "none"]
+    assert [r.get("x") for r in slices] == ["714.00"]
+    assert [r.get("fill") for r in slices] == ["red"]
+    # Every rectangle entry is drawn exactly once, as a base or as a slice.
+    assert sorted(r.get("x") for r in outside + slices) == ["177.00", "528.00", "714.00"]
+
+
+def test_vector_outlines_matched_boxes_like_unmatched_ones(pathway, fake_png):
+    svg, _ = render.render(pathway, parse_table("K00844\tred\n"), render.RenderOpts(mode="vector"))
+    outside, inside = split_rects(svg)
+    outlines = [r for r in inside if r.get("fill") == "none"]
+    assert [r.get("x") for r in outlines] == ["714.00"]
+    unmatched = outside[0]
+    for outline in outlines:
+        assert outline.get("stroke") == unmatched.get("stroke") == "#999999"
+        assert outline.get("stroke-width") == unmatched.get("stroke-width") == "0.5"
+        assert outline.get("width") == unmatched.get("width")
+        assert outline.get("height") == unmatched.get("height")
+    # Raster mode must not outline anything: KEGG's own artwork draws the borders.
+    raster, _ = render.render(
+        pathway, parse_table("K00844\tred\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert [r.get("stroke") for r in overlay_rects(raster)] == [None]
 
 
 def test_vector_labels_every_box(pathway):
