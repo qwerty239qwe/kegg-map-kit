@@ -160,7 +160,7 @@ def _drop_header(records):
     """A first row whose first field is not a KO id is a header, not data."""
     if records and not KO_RE.match(records[0][1]):
         rest = records[1:]
-        if all(KO_RE.match(ko) for _, ko, _ in rest):
+        if rest and all(KO_RE.match(ko) for _, ko, _ in rest):
             return rest
     return records
 

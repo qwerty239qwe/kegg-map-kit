@@ -107,3 +107,12 @@ def test_ko_with_no_data_columns_raises():
 def test_empty_input_raises():
     with pytest.raises(intable.InputError):
         parse("")
+
+
+def test_single_invalid_ko_line_is_not_mistaken_for_a_header():
+    # A lone bad row has nothing following it, so `all(...)` over the empty
+    # remainder must not vacuously treat it as a header.
+    with pytest.raises(intable.InputError) as exc:
+        parse("notako\tred\n")
+    message = str(exc.value)
+    assert "line 1" in message and "NOTAKO" in message
