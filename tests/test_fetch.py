@@ -1,4 +1,5 @@
 import urllib.error
+from pathlib import Path
 
 import pytest
 
@@ -125,6 +126,21 @@ def test_png_size_reads_ihdr(fake_png):
 def test_png_size_rejects_non_png():
     with pytest.raises(fetch.FetchError):
         fetch.png_size(b"not a png at all, really not")
+
+
+def test_write_failure_partway_leaves_no_partial_destination_file(monkeypatch, cache):
+    """A failure during the write step must not leave a truncated file at the
+    destination path. `_download` succeeds and returns real bytes; the final
+    `Path.replace` step is the one that fails."""
+    install_fake(monkeypatch, payload=b"<pathway/>")
+
+    def exploding_replace(self, target):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "replace", exploding_replace)
+    with pytest.raises(OSError):
+        fetch.get_kgml("ko00010", cache)
+    assert not (cache / "ko00010.kgml").exists()
 
 
 def test_cache_dir_honours_override(tmp_path):
