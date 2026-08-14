@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<pathway name="path:ko00010" org="ko" number="00010"
+         title="Glycolysis / Gluconeogenesis"
+         image="https://www.kegg.jp/kegg/pathway/ko/ko00010.png"
+         link="https://www.kegg.jp/kegg-bin/show_pathway?ko00010">
+    <entry id="1" name="ko:K00844" type="ortholog"
+           link="https://www.kegg.jp/dbget-bin/www_bget?K00844">
+        <graphics name="K00844" fgcolor="#000000" bgcolor="#BFFFBF"
+                  type="rectangle" x="737" y="180" width="46" height="17"/>
+    </entry>
+    <entry id="2" name="ko:K01810 ko:K06859 ko:K13810" type="ortholog"
+           link="https://www.kegg.jp/dbget-bin/www_bget?K01810">
+        <graphics name="K01810, GPI" fgcolor="#000000" bgcolor="#BFFFBF"
+                  type="rectangle" x="551" y="180" width="46" height="17"/>
+    </entry>
+    <entry id="3" name="cpd:C00031" type="compound"
+           link="https://www.kegg.jp/dbget-bin/www_bget?C00031">
+        <graphics name="C00031" fgcolor="#000000" bgcolor="#FFFFFF"
+                  type="circle" x="737" y="140" width="8" height="8"/>
+    </entry>
+    <entry id="4" name="path:ko00020" type="map"
+           link="https://www.kegg.jp/dbget-bin/www_bget?ko00020">
+        <graphics name="Citrate cycle" fgcolor="#000000" bgcolor="#FFFFFF"
+                  type="roundrectangle" x="400" y="900" width="90" height="25"/>
+    </entry>
+    <entry id="5" name="ko:K00845" type="ortholog"
+           link="https://www.kegg.jp/dbget-bin/www_bget?K00845">
+        <graphics name="K00845" fgcolor="#000000" bgcolor="#BFFFBF"
+                  type="rectangle" x="200" y="300" width="46" height="17"/>
+    </entry>
+    <entry id="6" name="undefined" type="ortholog" link="https://www.kegg.jp/">
+        <graphics fgcolor="#000000" bgcolor="#FFFFFF"
+                  type="line" coords="100,100,200,200"/>
+    </entry>
+    <relation entry1="1" entry2="2" type="ECrel">
+        <subtype name="compound" value="3"/>
+    </relation>
+    <relation entry1="2" entry2="5" type="ECrel">
+        <subtype name="compound" value="3"/>
+    </relation>
+</pathway>
