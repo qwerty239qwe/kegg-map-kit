@@ -24,6 +24,7 @@ UNMATCHED_FILL = "#ffffff"
 UNMATCHED_STROKE = "#999999"
 OUTLINE_WIDTH = "0.5"
 LABEL_SIZE = 8
+LABEL_FILL = "#000000"
 
 
 class RenderError(ValueError):
@@ -109,13 +110,12 @@ def render(
     body.append('<g id="kegg-svg-overlay">' + "".join(overlay) + "</g>")
 
     if opts.mode == "vector":
-        body.extend(_vector_labels(pathway))
+        body.extend(_vector_labels(pathway, table))
 
     body.append(_legend_svg(width, height, table, opts, vmin, vmax))
 
     header = (
         '<svg xmlns="http://www.w3.org/2000/svg" '
-        'xmlns:xlink="http://www.w3.org/1999/xlink" '
         f'width="{_n(width)}" height="{_n(height)}" '
         f'viewBox="0 0 {_n(width)} {_n(height)}">'
     )
@@ -221,19 +221,33 @@ def _outline(box: kgml.Box) -> str:
     )
 
 
-def _vector_labels(pathway: kgml.Pathway) -> list[str]:
+def _vector_labels(pathway: kgml.Pathway, table: intable.Table) -> list[str]:
     out = []
     for entry in pathway.entries:
         if entry.box is None or not entry.label:
             continue
         box = entry.box
+        fill = _label_fill(entry, table)
         out.append(
             f'<text x="{_n(box.x + box.w / 2)}" y="{_n(box.y + box.h / 2)}" '
             f'text-anchor="middle" dominant-baseline="central" '
-            f'font-family="sans-serif" font-size="{LABEL_SIZE}" fill="#000000">'
+            f'font-family="sans-serif" font-size="{LABEL_SIZE}" fill={quoteattr(fill)}>'
             f"{escape(entry.label)}</text>"
         )
     return out
+
+
+def _label_fill(entry: kgml.Entry, table: intable.Table) -> str:
+    """KEGG Mapper's ``bg,fg`` foreground for this box, else black.
+
+    Resolved through the same "first KO the user actually supplied" rule the
+    link target uses, so a box carrying several orthologs takes its text colour
+    from the same row it links to.
+    """
+    linked = next((k for k in entry.ko_ids if k in table.rows), None)
+    if linked is None:
+        return LABEL_FILL
+    return table.fg.get(linked, LABEL_FILL)
 
 
 def _relation_lines(pathway: kgml.Pathway) -> list[str]:

@@ -5,7 +5,6 @@ import pytest
 from kegg_svg import intable, kgml, render
 
 SVG = "{http://www.w3.org/2000/svg}"
-XLINK = "{http://www.w3.org/1999/xlink}"
 
 
 def parse_table(text):
@@ -368,3 +367,21 @@ def test_no_legend_option_suppresses_it(pathway, fake_png):
         png=fake_png,
     )
     assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is None
+
+
+def test_vector_label_uses_the_foreground_colour(pathway):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t#ff0000,#0000ff\n"), render.RenderOpts(mode="vector")
+    )
+    labels = {t.text: t.get("fill") for t in ET.fromstring(svg).findall(f".//{SVG}text")}
+    assert labels["K00844"] == "#0000ff"
+    # A box with no foreground entry keeps the default.
+    assert labels["K00845"] == "#000000"
+
+
+def test_vector_label_defaults_to_black_without_a_foreground(pathway):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t#ff0000\n"), render.RenderOpts(mode="vector")
+    )
+    labels = {t.text: t.get("fill") for t in ET.fromstring(svg).findall(f".//{SVG}text")}
+    assert labels["K00844"] == "#000000"
