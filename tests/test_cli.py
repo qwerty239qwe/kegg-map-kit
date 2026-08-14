@@ -322,3 +322,21 @@ def test_bad_unmapped_color_exits_1(warm_cache, input_file):
     )
     assert code == 1
     assert "--unmapped-color" in err
+
+
+def test_blend_multiply_reaches_the_svg(warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--blend", "multiply"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert group.get("style") == "mix-blend-mode:multiply"
+
+
+def test_default_has_no_blend(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert group.get("style") is None

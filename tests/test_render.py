@@ -616,3 +616,69 @@ def test_vector_unmapped_boxes_are_painted_once(pathway):
     )
     xs = [r.get("x") for r in ET.fromstring(svg).findall(f".//{SVG}rect")]
     assert sorted(xs) == ["177.00", "528.00", "714.00", "714.00"]  # +1 outline on the matched box
+
+
+def group_style(svg_text, group_id):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="{group_id}"]')
+    return None if group is None else group.get("style")
+
+
+def test_no_blend_mode_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert group_style(svg, "kegg-svg-overlay") is None
+
+
+def test_multiply_blend_is_applied_to_the_overlay(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply"),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-overlay") == "mix-blend-mode:multiply"
+
+
+def test_multiply_blend_also_covers_unmapped_boxes(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply", unmapped_color="lightgrey"),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-unmapped") == "mix-blend-mode:multiply"
+
+
+def test_value_labels_are_never_blended(pathway, fake_png):
+    # Multiply would erase the white halo (white x anything = anything), so the
+    # annotation layer must keep normal compositing.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply", label_values=True),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-values") is None
+
+
+def test_unknown_blend_raises(pathway, fake_png):
+    with pytest.raises(render.RenderError):
+        render.render(
+            pathway,
+            parse_table("K00844\t1.0\n"),
+            render.RenderOpts(mode="raster", blend="screen"),
+            png=fake_png,
+        )
+
+
+def test_blend_stays_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply"),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second

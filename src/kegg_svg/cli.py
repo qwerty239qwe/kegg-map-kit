@@ -59,6 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-links", dest="links", action="store_false")
     parser.add_argument("--na-color", default=None, help="fill for cells with no value")
     parser.add_argument(
+        "--blend",
+        choices=render.BLEND_MODES,
+        default="normal",
+        help=(
+            "compositing for the colour layer; 'multiply' keeps KEGG's own gene "
+            "labels readable under the fill (default: normal)"
+        ),
+    )
+    parser.add_argument(
         "--unmapped-color",
         default=None,
         help="fill for boxes on the map the input has no data for",
@@ -181,6 +190,7 @@ def _build(args) -> tuple[str, render.Stats, str]:
         label_values=args.label_values,
         label_size=args.label_size,
         unmapped_color=args.unmapped_color,
+        blend=args.blend,
     )
     svg, stats = render.render(pathway, table, opts, png=png)
     return svg, stats, pathway_id

@@ -19,6 +19,7 @@ from xml.sax.saxutils import escape, quoteattr
 from . import colormap, fetch, intable, kgml, legend
 
 MAX_SLICES = 12
+BLEND_MODES = ("normal", "multiply")
 ENTRY_URL = "https://www.kegg.jp/entry/{ko}"
 UNMATCHED_FILL = "#ffffff"
 UNMATCHED_STROKE = "#999999"
@@ -44,6 +45,7 @@ class RenderOpts:
     label_values: bool = False
     label_size: float = 7.0
     unmapped_color: str | None = None
+    blend: str = "normal"
 
 
 @dataclass
@@ -70,6 +72,10 @@ def render(
         raise RenderError(f"unknown render mode {opts.mode!r}")
     if opts.mode == "raster" and png is None:
         raise RenderError("raster mode needs the map PNG")
+    if opts.blend not in BLEND_MODES:
+        raise RenderError(
+            f"unknown blend mode {opts.blend!r}; choose from {', '.join(BLEND_MODES)}"
+        )
 
     vmin, vmax = colormap.resolve_scale(intable.values(table), opts.cmap, opts.vmin, opts.vmax)
     if opts.mode == "raster":
@@ -123,10 +129,14 @@ def render(
         body.extend(_relation_lines(pathway))
         body.extend(_vector_base_boxes(pathway, painted))
 
-    if opts.unmapped_color:
-        body.append('<g id="kegg-svg-unmapped">' + "".join(unmapped) + "</g>")
+    # Multiply keeps KEGG's baked-in gene labels legible: the white box
+    # background takes the colour, while black glyphs multiply to black.
+    blend = f' style="mix-blend-mode:{opts.blend}"' if opts.blend != "normal" else ""
 
-    body.append('<g id="kegg-svg-overlay">' + "".join(overlay) + "</g>")
+    if opts.unmapped_color:
+        body.append(f'<g id="kegg-svg-unmapped"{blend}>' + "".join(unmapped) + "</g>")
+
+    body.append(f'<g id="kegg-svg-overlay"{blend}>' + "".join(overlay) + "</g>")
 
     if opts.mode == "vector":
         body.extend(_vector_labels(pathway, table))
