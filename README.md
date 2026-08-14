@@ -20,7 +20,12 @@ Zero runtime dependencies — Python 3.10+ and the standard library.
 
     K00844	#ff0000
     K01810	blue
-    K00845	#00ff00,#000000    # KEGG Mapper bg,fg syntax
+    K00845	#00ff00,#000000
+
+The third line uses KEGG Mapper's `bg,fg` syntax: the second colour sets the
+box's label colour in `--mode vector`. Fields may be separated by tabs, commas
+or spaces, so a file written for KEGG Mapper works unchanged. Only whole lines
+beginning with `#` are treated as comments; there are no trailing comments.
 
 or values, which are mapped through a colormap and get a legend:
 
@@ -39,7 +44,7 @@ slices (up to 12).
 | `--vmin` / `--vmax` | auto | Colour scale bounds. Diverging maps auto-scale symmetrically |
 | `--opacity` | `0.75` | Overlay opacity in raster mode |
 | `--offline` | off | Use the cache only, never the network |
-| `--cache DIR` | `~/.cache/kegg-svg` | Cache location |
+| `--cache DIR` | `$XDG_CACHE_HOME/kegg-svg`, else `~/.cache/kegg-svg` | Cache location |
 | `--kgml` / `--png` | — | Use local files instead of fetching |
 | `--na-color HEX` | — | Fill for blank cells; blank cells are skipped by default |
 | `--no-legend`, `--no-links` | — | Suppress the colorbar / the links to KEGG |
