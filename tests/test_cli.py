@@ -221,3 +221,49 @@ def test_version_flag(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["--version"])
     assert exc.value.code == 0
+    assert "0.1.0" in capsys.readouterr().out
+
+
+def test_unwritable_output_path_exits_1(warm_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "/nope/does/not/exist/x.svg",
+         "--cache", str(warm_cache), "--offline"]
+    )
+    assert code == 1
+    assert err.startswith("kegg-svg:")
+
+
+def test_bad_na_color_exits_1(warm_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--na-color", "totally-not-a-colour"]
+    )
+    assert code == 1
+    assert "totally-not-a-colour" in err
+
+
+def test_valid_na_color_is_accepted(warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--na-color", "#cccccc"]
+    )
+    assert code == 0
+    assert out.startswith("<svg")
+
+
+def test_malformed_input_with_cold_cache_exits_1_not_2(monkeypatch, tmp_path):
+    import urllib.error
+
+    from kegg_svg import fetch
+
+    def boom(request, timeout=None):
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(fetch, "_urlopen", boom)
+    bad = tmp_path / "bad.tsv"
+    bad.write_text("K00844\tred\nnotako\tblue\n")
+    code, _, err = invoke(
+        ["ko00010", "-i", str(bad), "-o", "-", "--cache", str(tmp_path / "cold")]
+    )
+    assert code == 1
+    assert "line 2" in err

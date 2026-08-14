@@ -70,6 +70,12 @@ def main(argv: list[str] | None = None, stdout=None, stderr=None) -> int:
 
     try:
         svg, stats, pathway_id = _build(args)
+        # The write lives inside the try so an unwritable --output path is a
+        # clean exit 1, not a traceback.
+        if args.output == "-":
+            out.write(svg)
+        else:
+            Path(args.output).write_text(svg, encoding="utf-8")
     except (
         fetch.OfflineError,
         fetch.NotFoundError,
@@ -95,11 +101,6 @@ def main(argv: list[str] | None = None, stdout=None, stderr=None) -> int:
         print(f"kegg-svg: {exc}", file=err)
         return EXIT_USER
 
-    if args.output == "-":
-        out.write(svg)
-    else:
-        Path(args.output).write_text(svg, encoding="utf-8")
-
     if not args.quiet:
         print(
             f"kegg-svg: {stats.matched_kos}/{stats.input_kos} input KOs matched "
@@ -122,8 +123,20 @@ def _build(args) -> tuple[str, render.Stats, str]:
     if args.png and args.mode == "vector":
         raise render.RenderError("--png has no meaning in vector mode")
 
+    if args.na_color is not None and not intable.is_color(args.na_color):
+        raise intable.InputError(f"--na-color {args.na_color!r} is not a colour")
+
     pathway_id = fetch.normalize_pathway(args.pathway)
     cache = fetch.cache_dir(args.cache)
+
+    # The input table is parsed before anything is fetched: on a cold cache a
+    # malformed table should fail instantly and accurately, not after a slow
+    # network round trip that reports the wrong problem.
+    if args.input == "-":
+        table = intable.parse(sys.stdin)
+    else:
+        with open(args.input, encoding="utf-8") as handle:
+            table = intable.parse(handle)
 
     if args.kgml:
         kgml_text = Path(args.kgml).read_text(encoding="utf-8")
@@ -137,12 +150,6 @@ def _build(args) -> tuple[str, render.Stats, str]:
             png = Path(args.png).read_bytes()
         else:
             png = fetch.get_map_png(pathway_id, cache, args.offline)
-
-    if args.input == "-":
-        table = intable.parse(sys.stdin)
-    else:
-        with open(args.input, encoding="utf-8") as handle:
-            table = intable.parse(handle)
 
     opts = render.RenderOpts(
         mode=args.mode,
