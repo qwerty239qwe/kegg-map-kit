@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, field
 
 KO_RE = re.compile(r"^K\d{5}$", re.IGNORECASE)
+_WS_RE = re.compile(r"\s")
 HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 # The CSS/SVG named colours users actually reach for. Anything outside this set
@@ -150,10 +151,31 @@ def _read_records(fileobj) -> list[tuple[int, str, list[str]]]:
         line = raw.rstrip("\r\n")
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        sep = "\t" if "\t" in line else ","
-        fields = [f.strip() for f in line.split(sep)]
+        fields = _split(line)
         records.append((lineno, fields[0].upper(), fields[1:]))
     return records
+
+
+def _split(line: str) -> list[str]:
+    """Split one data line into fields.
+
+    A tab always wins. Otherwise the separator is whichever of a comma or a run
+    of whitespace appears first, so a KEGG Mapper file written with spaces
+    (``K00845 #00ff00,#000000``) keeps its ``bg,fg`` pair in a single cell while
+    a CSV written with a space after each comma still splits on the commas.
+
+    Tab- and comma-separated lines keep their empty cells; a whitespace-
+    separated one cannot express an empty cell at all.
+    """
+    if "\t" in line:
+        return [f.strip() for f in line.split("\t")]
+    trimmed = line.strip()
+    comma = trimmed.find(",")
+    space = _WS_RE.search(trimmed)
+    space_at = space.start() if space else -1
+    if space_at != -1 and (comma == -1 or space_at < comma):
+        return trimmed.split()
+    return [f.strip() for f in line.split(",")]
 
 
 def _drop_header(records):
@@ -176,7 +198,7 @@ def _classify(records) -> str:
         for cell in cells:
             if not cell:
                 continue
-            if _is_color(cell.split(",")[0]):
+            if is_color(cell.split(",")[0]):
                 color_hits += 1
             elif _is_float(cell):
                 value_hits += 1
@@ -185,7 +207,8 @@ def _classify(records) -> str:
     return "color" if color_hits >= value_hits else "value"
 
 
-def _is_color(text: str) -> bool:
+def is_color(text: str) -> bool:
+    """True if ``text`` is a hex triple or one of the supported named colours."""
     return bool(HEX_RE.match(text)) or text.lower() in NAMED_COLORS
 
 
@@ -201,9 +224,9 @@ def _parse_color_cell(cell: str, lineno: int) -> tuple[str, str | None]:
     """Split KEGG Mapper's optional ``bg,fg`` pair. Returns (background, fg|None)."""
     parts = [p.strip() for p in cell.split(",")]
     background = parts[0]
-    if not _is_color(background):
+    if not is_color(background):
         raise InputError(f"line {lineno}: {cell!r} is not a colour")
-    foreground = parts[1] if len(parts) > 1 and _is_color(parts[1]) else None
+    foreground = parts[1] if len(parts) > 1 and is_color(parts[1]) else None
     return background, foreground
 
 

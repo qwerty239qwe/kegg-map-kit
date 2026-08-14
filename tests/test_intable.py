@@ -116,3 +116,33 @@ def test_single_invalid_ko_line_is_not_mistaken_for_a_header():
         parse("notako\tred\n")
     message = str(exc.value)
     assert "line 1" in message and "NOTAKO" in message
+
+
+def test_whitespace_separated_colours():
+    # A genuine KEGG Mapper file uses spaces, not tabs or commas.
+    table = parse("K00844 #ff0000\nK00845 blue\n")
+    assert table.mode == "color"
+    assert table.rows == {"K00844": ("#ff0000",), "K00845": ("blue",)}
+
+
+def test_whitespace_separated_values():
+    table = parse("K00844 2.0 1.4\nK00845 -1.5 -0.2\n")
+    assert table.mode == "value"
+    assert table.n_cols == 2
+    assert table.rows == {"K00844": (2.0, 1.4), "K00845": (-1.5, -0.2)}
+
+
+def test_whitespace_separated_bg_fg_pair_stays_one_cell():
+    table = parse("K00845 #00ff00,#000000\n")
+    assert table.rows == {"K00845": ("#00ff00",)}
+    assert table.fg == {"K00845": "#000000"}
+
+
+def test_comma_file_with_spaces_after_the_comma_still_splits_on_commas():
+    assert parse("K00844, #ff0000, blue\n").rows == {"K00844": ("#ff0000", "blue")}
+
+
+def test_is_color_is_public():
+    assert intable.is_color("#ff0000")
+    assert intable.is_color("blue")
+    assert not intable.is_color("totally-not-a-colour")
