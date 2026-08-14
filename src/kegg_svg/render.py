@@ -41,6 +41,8 @@ class RenderOpts:
     cmap: str = "coolwarm"
     vmin: float | None = None
     vmax: float | None = None
+    label_values: bool = False
+    label_size: float = 7.0
 
 
 @dataclass
@@ -79,6 +81,7 @@ def render(
     matched: set[str] = set()
 
     overlay: list[str] = []
+    annotations: list[str] = []
     coloured: set[str] = set()
     for entry in pathway.entries:
         if entry.box is None:
@@ -93,6 +96,8 @@ def render(
             slices = slices[:MAX_SLICES]
             stats.capped_entries += 1
         overlay.append(_box_svg(entry, slices, table, opts))
+        if opts.label_values:
+            annotations.append(_value_label_svg(entry, table, opts))
 
     stats.matched_kos = len(matched)
 
@@ -111,6 +116,9 @@ def render(
 
     if opts.mode == "vector":
         body.extend(_vector_labels(pathway, table))
+
+    if opts.label_values:
+        body.append('<g id="kegg-svg-values">' + "".join(annotations) + "</g>")
 
     body.append(_legend_svg(width, height, table, opts, vmin, vmax))
 
@@ -152,6 +160,45 @@ def _slices_for(
                     )
                 )
     return out
+
+
+def _value_lines(entry: kgml.Entry, table: intable.Table) -> list[str]:
+    """One formatted line per matched KO, in KGML order, so line N reads against
+    slice N of the box. A KO measured across several columns keeps its values on
+    a single line rather than pushing the stack taller than the box it labels."""
+    if table.mode != "value":
+        return []
+    lines = []
+    for ko in entry.ko_ids:
+        row = table.rows.get(ko)
+        if row is None:
+            continue
+        cells = [f"{float(c):+.2f}" for c in row if c is not None]
+        if cells:
+            lines.append(", ".join(cells))
+    return lines
+
+
+def _value_label_svg(entry: kgml.Entry, table: intable.Table, opts: RenderOpts) -> str:
+    box = entry.box
+    assert box is not None
+    lines = _value_lines(entry, table)
+    if not lines:
+        return ""
+
+    # Stacked under the box: KEGG packs boxes side by side far more often than
+    # it stacks them, so below collides least. The white halo is painted first
+    # (paint-order) so the digits stay readable over map artwork.
+    cx = box.x + box.w / 2
+    top = box.y + box.h + opts.label_size
+    step = opts.label_size * 1.15
+    return "".join(
+        f'<text x="{_n(cx)}" y="{_n(top + i * step)}" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="{_n(opts.label_size)}" '
+        f'fill="#000000" stroke="#ffffff" stroke-width="{_n(opts.label_size / 4)}" '
+        f'paint-order="stroke">{escape(line)}</text>'
+        for i, line in enumerate(lines)
+    )
 
 
 def _box_svg(

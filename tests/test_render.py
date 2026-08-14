@@ -385,3 +385,132 @@ def test_vector_label_defaults_to_black_without_a_foreground(pathway):
     )
     labels = {t.text: t.get("fill") for t in ET.fromstring(svg).findall(f".//{SVG}text")}
     assert labels["K00844"] == "#000000"
+
+
+def value_labels(svg_text):
+    """Text nodes inside the coefficient-annotation group."""
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    return group.findall(f".//{SVG}text") if group is not None else []
+
+
+def test_no_value_labels_unless_requested(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t0.7\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert value_labels(svg) == []
+
+
+def test_value_label_sits_below_its_box_and_is_signed(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    labels = value_labels(svg)
+    assert len(labels) == 1
+    assert labels[0].text == "+0.70"
+    # Fixture entry 1 box is top-left (714.0, 171.5), 46 x 17.
+    assert float(labels[0].get("x")) == pytest.approx(714.0 + 46 / 2)
+    assert float(labels[0].get("y")) > 171.5 + 17
+    assert labels[0].get("text-anchor") == "middle"
+
+
+def test_negative_values_keep_their_sign(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t-0.33\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert value_labels(svg)[0].text == "-0.33"
+
+
+def test_one_label_line_per_matched_ko_in_slice_order(pathway, fake_png):
+    # Fixture entry 2 lists K01810, K06859, K13810. Two are supplied, so the
+    # box gets two stacked lines in KGML order, matching its two colour slices.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K13810\t-0.40\nK01810\t0.90\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    labels = value_labels(svg)
+    assert [t.text for t in labels] == ["+0.90", "-0.40"]
+    assert float(labels[0].get("y")) < float(labels[1].get("y"))
+    assert labels[0].get("x") == labels[1].get("x")
+
+
+def test_multi_column_values_join_on_one_line_per_ko(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\t-0.2\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70, -0.20"]
+
+
+def test_colour_mode_has_no_value_labels(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\tred\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert value_labels(svg) == []
+
+
+def test_na_cells_are_skipped_within_a_label_line(pathway, fake_png):
+    # intable rejects a row with no data at all, so an all-NA KO cannot exist;
+    # the reachable case is a KO measured in some columns and not others.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\t\nK00845\t0.1\t0.2\n"),
+        render.RenderOpts(mode="raster", label_values=True, na_color="#cccccc"),
+        png=fake_png,
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70", "+0.10, +0.20"]
+
+
+def test_value_labels_carry_a_halo_for_legibility(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    label = value_labels(svg)[0]
+    assert label.get("stroke") == "#ffffff"
+    assert label.get("paint-order") == "stroke"
+
+
+def test_label_size_is_configurable(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True, label_size=11.0),
+        png=fake_png,
+    )
+    assert value_labels(svg)[0].get("font-size") == "11.00"
+
+
+def test_value_labels_work_in_vector_mode_too(pathway):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="vector", label_values=True),
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70"]
+
+
+def test_value_labels_stay_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t0.7\nK01810\t-0.3\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second

@@ -46,7 +46,9 @@ slices (up to 12).
 | `--offline` | off | Use the cache only, never the network |
 | `--cache DIR` | `$XDG_CACHE_HOME/kegg-svg`, else `~/.cache/kegg-svg` | Cache location |
 | `--kgml` / `--png` | — | Use local files instead of fetching |
-| `--na-color HEX` | — | Fill for blank cells; blank cells are skipped by default |
+| `--na-color COLOR` | — | Fill for blank cells; blank cells are skipped by default |
+| `--label-values` | off | Print each value beneath its box. Value input only |
+| `--label-size` | `7` | Font size for `--label-values` |
 | `--no-legend`, `--no-links` | — | Suppress the colorbar / the links to KEGG |
 | `-q` | off | Suppress the summary line |
 

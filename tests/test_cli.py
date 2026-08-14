@@ -267,3 +267,30 @@ def test_malformed_input_with_cold_cache_exits_1_not_2(monkeypatch, tmp_path):
     )
     assert code == 1
     assert "line 2" in err
+
+
+def test_label_values_flag_annotates_the_svg(tmp_path, warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--label-values"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    assert group is not None
+    assert [t.text for t in group.findall(f".//{SVG}text")] == ["+2.00", "-1.00"]
+
+
+def test_labels_absent_without_the_flag(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]') is None
+
+
+def test_label_size_reaches_the_renderer(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--label-values", "--label-size", "12"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    assert group.findall(f".//{SVG}text")[0].get("font-size") == "12.00"

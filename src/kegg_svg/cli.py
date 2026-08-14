@@ -58,6 +58,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-legend", dest="legend", action="store_false")
     parser.add_argument("--no-links", dest="links", action="store_false")
     parser.add_argument("--na-color", default=None, help="fill for cells with no value")
+    parser.add_argument(
+        "--label-values",
+        action="store_true",
+        help="print each value beneath its box (value input only)",
+    )
+    parser.add_argument(
+        "--label-size",
+        type=float,
+        default=7.0,
+        help="font size for --label-values (default: 7)",
+    )
     parser.add_argument("-q", "--quiet", action="store_true")
     parser.add_argument("--version", action="version", version=f"kegg-svg {__version__}")
     return parser
@@ -160,6 +171,8 @@ def _build(args) -> tuple[str, render.Stats, str]:
         cmap=args.cmap,
         vmin=args.vmin,
         vmax=args.vmax,
+        label_values=args.label_values,
+        label_size=args.label_size,
     )
     svg, stats = render.render(pathway, table, opts, png=png)
     return svg, stats, pathway_id
