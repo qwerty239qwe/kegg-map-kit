@@ -294,3 +294,31 @@ def test_label_size_reaches_the_renderer(warm_cache, input_file):
     )
     group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
     assert group.findall(f".//{SVG}text")[0].get("font-size") == "12.00"
+
+
+def test_unmapped_color_greys_boxes_without_data(warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--unmapped-color", "lightgrey"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    assert group is not None
+    fills = {r.get("fill") for r in group.findall(f".//{SVG}rect")}
+    assert fills == {"lightgrey"}
+
+
+def test_no_unmapped_group_without_the_flag(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]') is None
+
+
+def test_bad_unmapped_color_exits_1(warm_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--unmapped-color", "not-a-colour"]
+    )
+    assert code == 1
+    assert "--unmapped-color" in err

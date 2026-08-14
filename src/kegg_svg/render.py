@@ -43,6 +43,7 @@ class RenderOpts:
     vmax: float | None = None
     label_values: bool = False
     label_size: float = 7.0
+    unmapped_color: str | None = None
 
 
 @dataclass
@@ -82,15 +83,25 @@ def render(
 
     overlay: list[str] = []
     annotations: list[str] = []
+    unmapped: list[str] = []
     coloured: set[str] = set()
+    # Entries already given a flat fill, so the vector base pass skips them.
+    painted: set[str] = set()
     for entry in pathway.entries:
         if entry.box is None:
             continue
         slices = _slices_for(entry, table, opts, vmin, vmax)
         if not slices:
+            # An ortholog box the user supplied no data for. Boxes carrying no
+            # KO at all — compounds, links to other pathways — are not "missing
+            # data" and are left as KEGG drew them.
+            if opts.unmapped_color and entry.ko_ids:
+                unmapped.append(_unmapped_svg(entry, opts))
+                painted.add(entry.id)
             continue
         matched.update(k for k in entry.ko_ids if k in table.rows)
         coloured.add(entry.id)
+        painted.add(entry.id)
         stats.matched_boxes += 1
         if len(slices) > MAX_SLICES:
             slices = slices[:MAX_SLICES]
@@ -110,7 +121,10 @@ def render(
         )
     else:
         body.extend(_relation_lines(pathway))
-        body.extend(_vector_base_boxes(pathway, coloured))
+        body.extend(_vector_base_boxes(pathway, painted))
+
+    if opts.unmapped_color:
+        body.append('<g id="kegg-svg-unmapped">' + "".join(unmapped) + "</g>")
 
     body.append('<g id="kegg-svg-overlay">' + "".join(overlay) + "</g>")
 
@@ -160,6 +174,25 @@ def _slices_for(
                     )
                 )
     return out
+
+
+def _unmapped_svg(entry: kgml.Entry, opts: RenderOpts) -> str:
+    """Flat fill over an ortholog box the input said nothing about."""
+    box = entry.box
+    assert box is not None
+    opacity = opts.opacity if opts.mode == "raster" else 1.0
+    stroke = (
+        f' stroke="{UNMATCHED_STROKE}" stroke-width="{OUTLINE_WIDTH}"'
+        if opts.mode == "vector"
+        else ""
+    )
+    tip = escape(f"{entry.label or ','.join(entry.ko_ids)} — no data")
+    return (
+        f"<g><title>{tip}</title>"
+        f'<rect x="{_n(box.x)}" y="{_n(box.y)}" width="{_n(box.w)}" height="{_n(box.h)}" '
+        f"fill={quoteattr(opts.unmapped_color or '')} fill-opacity=\"{opacity:.2f}\"{stroke}/>"
+        "</g>"
+    )
 
 
 def _value_lines(entry: kgml.Entry, table: intable.Table) -> list[str]:

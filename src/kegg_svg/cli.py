@@ -59,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-links", dest="links", action="store_false")
     parser.add_argument("--na-color", default=None, help="fill for cells with no value")
     parser.add_argument(
+        "--unmapped-color",
+        default=None,
+        help="fill for boxes on the map the input has no data for",
+    )
+    parser.add_argument(
         "--label-values",
         action="store_true",
         help="print each value beneath its box (value input only)",
@@ -136,6 +141,8 @@ def _build(args) -> tuple[str, render.Stats, str]:
 
     if args.na_color is not None and not intable.is_color(args.na_color):
         raise intable.InputError(f"--na-color {args.na_color!r} is not a colour")
+    if args.unmapped_color is not None and not intable.is_color(args.unmapped_color):
+        raise intable.InputError(f"--unmapped-color {args.unmapped_color!r} is not a colour")
 
     pathway_id = fetch.normalize_pathway(args.pathway)
     cache = fetch.cache_dir(args.cache)
@@ -173,6 +180,7 @@ def _build(args) -> tuple[str, render.Stats, str]:
         vmax=args.vmax,
         label_values=args.label_values,
         label_size=args.label_size,
+        unmapped_color=args.unmapped_color,
     )
     svg, stats = render.render(pathway, table, opts, png=png)
     return svg, stats, pathway_id

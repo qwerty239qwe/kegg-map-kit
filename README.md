@@ -47,6 +47,7 @@ slices (up to 12).
 | `--cache DIR` | `$XDG_CACHE_HOME/kegg-svg`, else `~/.cache/kegg-svg` | Cache location |
 | `--kgml` / `--png` | — | Use local files instead of fetching |
 | `--na-color COLOR` | — | Fill for blank cells; blank cells are skipped by default |
+| `--unmapped-color COLOR` | — | Fill for KO boxes the input has no data for. Boxes carrying no KO at all (compounds, links to other maps) are left as KEGG drew them |
 | `--label-values` | off | Print each value beneath its box. Value input only |
 | `--label-size` | `7` | Font size for `--label-values` |
 | `--no-legend`, `--no-links` | — | Suppress the colorbar / the links to KEGG |

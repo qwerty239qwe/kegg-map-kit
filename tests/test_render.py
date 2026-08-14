@@ -514,3 +514,105 @@ def test_value_labels_stay_deterministic(pathway, fake_png):
     first, _ = render.render(*args, png=fake_png)
     second, _ = render.render(*args, png=fake_png)
     assert first == second
+
+
+def unmapped_rects(svg_text):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    return group.findall(f".//{SVG}rect") if group is not None else []
+
+
+def test_no_unmapped_group_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert unmapped_rects(svg) == []
+
+
+def test_unmapped_boxes_get_the_colour(pathway, fake_png):
+    # Fixture rectangles carry K00844 (entry 1), K01810/K06859/K13810 (entry 2)
+    # and K00845 (entry 5). Supplying only K00844 leaves two boxes unmapped.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    found = unmapped_rects(svg)
+    assert len(found) == 2
+    assert {r.get("fill") for r in found} == {"#dddddd"}
+    # Entry 2 at centre x=551 w=46 -> left edge 528; entry 5 at 200 -> 177.
+    assert sorted(r.get("x") for r in found) == ["177.00", "528.00"]
+
+
+def test_mapped_boxes_are_not_in_the_unmapped_group(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    assert "714.00" not in [r.get("x") for r in unmapped_rects(svg)]
+    assert overlay_rects(svg)[0].get("x") == "714.00"
+
+
+def test_boxes_without_any_ko_are_left_alone(fake_png):
+    # A rectangle that is not an ortholog entry carries no KO, so "no data" is
+    # not meaningful for it and it must not be greyed out.
+    text = (
+        '<?xml version="1.0"?><pathway name="path:ko1" title="t">'
+        '<entry id="1" name="ko:K00001" type="ortholog" link="x">'
+        '<graphics name="a" type="rectangle" x="50" y="50" width="40" height="20"/></entry>'
+        '<entry id="2" name="undefined" type="other" link="x">'
+        '<graphics name="b" type="rectangle" x="150" y="50" width="40" height="20"/></entry>'
+        "</pathway>"
+    )
+    svg, _ = render.render(
+        kgml.parse(text),
+        parse_table("K00002\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    found = unmapped_rects(svg)
+    assert len(found) == 1
+    assert found[0].get("x") == "30.00"
+
+
+def test_unmapped_uses_overlay_opacity_in_raster_and_none_in_vector(pathway, fake_png):
+    raster, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd", opacity=0.5),
+        png=fake_png,
+    )
+    assert unmapped_rects(raster)[0].get("fill-opacity") == "0.50"
+    vector, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="vector", unmapped_color="#dddddd", opacity=0.5),
+    )
+    found = unmapped_rects(vector)
+    assert found[0].get("fill-opacity") == "1.00"
+    assert found[0].get("stroke") == "#999999"
+
+
+def test_unmapped_colour_is_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second
+
+
+def test_vector_unmapped_boxes_are_painted_once(pathway):
+    # The grey fill replaces the neutral base rather than stacking on top of it.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\tred\n"),
+        render.RenderOpts(mode="vector", unmapped_color="#dddddd"),
+    )
+    xs = [r.get("x") for r in ET.fromstring(svg).findall(f".//{SVG}rect")]
+    assert sorted(xs) == ["177.00", "528.00", "714.00", "714.00"]  # +1 outline on the matched box
