@@ -1,10 +1,33 @@
 # kegg-map-kit
 
+[![CI](https://github.com/qwerty239qwe/kegg-map-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/qwerty239qwe/kegg-map-kit/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/qwerty239qwe/kegg-map-kit)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](https://github.com/qwerty239qwe/kegg-map-kit#readme)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Colour KEGG pathway maps from a table of KEGG Ontology (KO) identifiers and
 render the result as SVG. A scriptable, SVG-producing counterpart to the
 [KEGG Mapper](https://www.genome.jp/kegg/mapper/) Color tool.
 
 Zero runtime dependencies — Python 3.10+ and the standard library.
+
+## Example
+
+![Glycolysis coloured by log2 fold change](examples/glycolysis.svg)
+
+Glycolysis (`ko00010`) coloured from twelve values. Each box carries its EC
+number redrawn on top of an opaque fill, so the caption stays legible at any
+colour; the value is printed beneath; KO boxes with no data are grey; and the
+colorbar is pinned to a fixed range so separate maps stay comparable.
+
+    kegg-map-kit ko00010 -i examples/demo.tsv -o glycolysis.svg \
+        --cmap coolwarm --vmin -2.5 --vmax 2.5 \
+        --box-labels ec --unmapped-color '#ececec' --label-values
+
+The numbers in [`examples/demo.tsv`](examples/demo.tsv) are synthetic.
+[`examples/glycolysis_vector.svg`](examples/glycolysis_vector.svg) is the same
+data through `--mode vector`: no bitmap at all, so it rasterises losslessly at
+any resolution, at the cost of KEGG's arrows and decorations.
 
 ## Install
 
