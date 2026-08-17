@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from kegg_svg import cli
+from kegg_map_kit import cli
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -38,7 +38,7 @@ def test_end_to_end_writes_an_svg(tmp_path, warm_cache, input_file):
     assert code == 0
     root = ET.fromstring(out.read_text())
     assert root.tag == f"{SVG}svg"
-    assert root.find(f'.//{SVG}g[@id="kegg-svg-overlay"]') is not None
+    assert root.find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]') is not None
 
 
 def test_summary_line_goes_to_stderr(tmp_path, warm_cache, input_file):
@@ -149,7 +149,7 @@ def test_no_matches_warns_but_succeeds(tmp_path, warm_cache):
 def test_network_failure_with_cold_cache_exits_2(monkeypatch, tmp_path, input_file):
     import urllib.error
 
-    from kegg_svg import fetch
+    from kegg_map_kit import fetch
 
     def boom(request, timeout=None):
         raise urllib.error.URLError("down")
@@ -181,7 +181,7 @@ def test_capped_entries_warn(tmp_path, warm_cache):
 
 
 def test_bad_pathway_id_is_a_user_error_not_a_network_one(input_file):
-    from kegg_svg import fetch
+    from kegg_map_kit import fetch
 
     with pytest.raises(fetch.PathwayIdError):
         fetch.normalize_pathway("glycolysis")
@@ -230,7 +230,7 @@ def test_unwritable_output_path_exits_1(warm_cache, input_file):
          "--cache", str(warm_cache), "--offline"]
     )
     assert code == 1
-    assert err.startswith("kegg-svg:")
+    assert err.startswith("kegg-map-kit:")
 
 
 def test_bad_na_color_exits_1(warm_cache, input_file):
@@ -254,7 +254,7 @@ def test_valid_na_color_is_accepted(warm_cache, input_file):
 def test_malformed_input_with_cold_cache_exits_1_not_2(monkeypatch, tmp_path):
     import urllib.error
 
-    from kegg_svg import fetch
+    from kegg_map_kit import fetch
 
     def boom(request, timeout=None):
         raise urllib.error.URLError("down")
@@ -275,7 +275,7 @@ def test_label_values_flag_annotates_the_svg(tmp_path, warm_cache, input_file):
          "--offline", "--label-values"]
     )
     assert code == 0
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-values"]')
     assert group is not None
     assert [t.text for t in group.findall(f".//{SVG}text")] == ["+2.00", "-1.00"]
 
@@ -284,7 +284,7 @@ def test_labels_absent_without_the_flag(warm_cache, input_file):
     _, out, _ = invoke(
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
     )
-    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]') is None
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-values"]') is None
 
 
 def test_label_size_reaches_the_renderer(warm_cache, input_file):
@@ -292,7 +292,7 @@ def test_label_size_reaches_the_renderer(warm_cache, input_file):
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
          "--offline", "--label-values", "--label-size", "12"]
     )
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-values"]')
     assert group.findall(f".//{SVG}text")[0].get("font-size") == "12.00"
 
 
@@ -302,7 +302,7 @@ def test_unmapped_color_greys_boxes_without_data(warm_cache, input_file):
          "--offline", "--unmapped-color", "lightgrey"]
     )
     assert code == 0
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-unmapped"]')
     assert group is not None
     fills = {r.get("fill") for r in group.findall(f".//{SVG}rect")}
     assert fills == {"lightgrey"}
@@ -312,7 +312,7 @@ def test_no_unmapped_group_without_the_flag(warm_cache, input_file):
     _, out, _ = invoke(
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
     )
-    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]') is None
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-unmapped"]') is None
 
 
 def test_bad_unmapped_color_exits_1(warm_cache, input_file):
@@ -330,7 +330,7 @@ def test_blend_multiply_reaches_the_svg(warm_cache, input_file):
          "--offline", "--blend", "multiply"]
     )
     assert code == 0
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     assert group.get("style") == "mix-blend-mode:multiply"
 
 
@@ -338,7 +338,7 @@ def test_default_has_no_blend(warm_cache, input_file):
     _, out, _ = invoke(
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
     )
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     assert group.get("style") is None
 
 
@@ -356,7 +356,7 @@ def test_box_labels_ec_uses_kegg_own_string(ko_list_cache, input_file):
          "--offline", "--box-labels", "ec"]
     )
     assert code == 0
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-boxlabels"]')
     assert "2.7.1.1" in [t.text for t in group.findall(f".//{SVG}text")]
 
 
@@ -365,7 +365,7 @@ def test_box_labels_imply_opaque_fill(ko_list_cache, input_file):
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
          "--offline", "--box-labels", "ko"]
     )
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"1.00"}
 
 
@@ -374,7 +374,7 @@ def test_explicit_opacity_still_wins(ko_list_cache, input_file):
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
          "--offline", "--box-labels", "ko", "--opacity", "0.5"]
     )
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.50"}
 
 
@@ -382,7 +382,7 @@ def test_default_opacity_unchanged_without_box_labels(ko_list_cache, input_file)
     _, out, _ = invoke(
         ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache), "--offline"]
     )
-    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.75"}
 
 

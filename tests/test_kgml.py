@@ -1,6 +1,6 @@
 import pytest
 
-from kegg_svg import kgml
+from kegg_map_kit import kgml
 
 
 def test_parse_reads_pathway_metadata(kgml_text):

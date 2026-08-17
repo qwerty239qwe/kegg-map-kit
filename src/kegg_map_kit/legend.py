@@ -64,7 +64,7 @@ def draw(canvas_w: float, canvas_h: float, cmap: str, vmin: float, vmax: float) 
             f"{_tick(value)}</text>"
         )
 
-    return f'<g id="kegg-svg-legend">{"".join(parts)}</g>'
+    return f'<g id="kegg-map-kit-legend">{"".join(parts)}</g>'
 
 
 def _tick(value: float) -> str:

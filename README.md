@@ -1,4 +1,4 @@
-# kegg-svg
+# kegg-map-kit
 
 Colour KEGG pathway maps from a table of KEGG Ontology (KO) identifiers and
 render the result as SVG. A scriptable, SVG-producing counterpart to the
@@ -8,13 +8,13 @@ Zero runtime dependencies — Python 3.10+ and the standard library.
 
 ## Install
 
-    uv tool install kegg-svg
+    uv tool install kegg-map-kit
     # or
-    pip install kegg-svg
+    pip install kegg-map-kit
 
 ## Use
 
-    kegg-svg ko00010 -i data.tsv -o map.svg
+    kegg-map-kit ko00010 -i data.tsv -o map.svg
 
 `data.tsv` holds a KO identifier per line, followed by either colours or numbers:
 
@@ -44,7 +44,7 @@ slices (up to 12).
 | `--vmin` / `--vmax` | auto | Colour scale bounds. Diverging maps auto-scale symmetrically |
 | `--opacity` | `0.75` | Overlay opacity in raster mode |
 | `--offline` | off | Use the cache only, never the network |
-| `--cache DIR` | `$XDG_CACHE_HOME/kegg-svg`, else `~/.cache/kegg-svg` | Cache location |
+| `--cache DIR` | `$XDG_CACHE_HOME/kegg-map-kit`, else `~/.cache/kegg-map-kit` | Cache location |
 | `--kgml` / `--png` | — | Use local files instead of fetching |
 | `--na-color COLOR` | — | Fill for blank cells; blank cells are skipped by default |
 | `--unmapped-color COLOR` | — | Fill for KO boxes the input has no data for. Boxes carrying no KO at all (compounds, links to other maps) are left as KEGG drew them |

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "kegg-svg"
+name = "kegg-map-kit"
 version = "0.1.0"
 description = "Color KEGG pathway maps from KO identifiers and render to SVG"
 readme = "README.md"
@@ -12,13 +12,13 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-kegg-svg = "kegg_svg.cli:run"
+kegg-map-kit = "kegg_map_kit.cli:run"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kegg_svg"]
+packages = ["src/kegg_map_kit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

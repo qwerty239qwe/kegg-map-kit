@@ -19,7 +19,7 @@ from . import __version__
 KGML_URL = "https://rest.kegg.jp/get/{pathway}/kgml"
 PNG_URL = "https://www.kegg.jp/kegg/pathway/ko/{pathway}.png"
 KO_LIST_URL = "https://rest.kegg.jp/list/ko"
-USER_AGENT = f"kegg-svg/{__version__} (+https://pypi.org/project/kegg-svg/)"
+USER_AGENT = f"kegg-map-kit/{__version__} (+https://pypi.org/project/kegg-map-kit/)"
 TIMEOUT = 30
 PATHWAY_RE = re.compile(r"^(?:path:)?(?:ko|map)?(\d{5})$", re.IGNORECASE)
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -68,7 +68,7 @@ def cache_dir(override: str | None = None) -> Path:
         return Path(override).expanduser()
     base = os.environ.get("XDG_CACHE_HOME")
     root = Path(base).expanduser() if base else Path.home() / ".cache"
-    return root / "kegg-svg"
+    return root / "kegg-map-kit"
 
 
 def get_kgml(pathway: str, cache: Path, offline: bool = False) -> str:

@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 
-from kegg_svg import colormap, legend
+from kegg_map_kit import colormap, legend
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -11,7 +11,7 @@ def wrap(fragment):
 
 def test_draw_returns_a_well_formed_fragment():
     root = wrap(legend.draw(1000, 800, "coolwarm", -2.0, 2.0))
-    assert root.find(f'.//{SVG}g[@id="kegg-svg-legend"]') is not None
+    assert root.find(f'.//{SVG}g[@id="kegg-map-kit-legend"]') is not None
 
 
 def test_legend_sits_in_the_bottom_right():

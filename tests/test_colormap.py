@@ -1,6 +1,6 @@
 import pytest
 
-from kegg_svg import colormap
+from kegg_map_kit import colormap
 
 
 def test_lut_has_256_entries_of_hex():

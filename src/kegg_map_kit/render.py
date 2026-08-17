@@ -151,9 +151,9 @@ def render(
     blend = f' style="mix-blend-mode:{opts.blend}"' if opts.blend != "normal" else ""
 
     if opts.unmapped_color:
-        body.append(f'<g id="kegg-svg-unmapped"{blend}>' + "".join(unmapped) + "</g>")
+        body.append(f'<g id="kegg-map-kit-unmapped"{blend}>' + "".join(unmapped) + "</g>")
 
-    body.append(f'<g id="kegg-svg-overlay"{blend}>' + "".join(overlay) + "</g>")
+    body.append(f'<g id="kegg-map-kit-overlay"{blend}>' + "".join(overlay) + "</g>")
 
     # --box-labels supersedes vector's own captions; drawing both would stack
     # two texts on identical coordinates.
@@ -161,10 +161,10 @@ def render(
         body.extend(_vector_labels(pathway, table))
 
     if opts.box_labels:
-        body.append('<g id="kegg-svg-boxlabels">' + "".join(boxlabels) + "</g>")
+        body.append('<g id="kegg-map-kit-boxlabels">' + "".join(boxlabels) + "</g>")
 
     if opts.label_values:
-        body.append('<g id="kegg-svg-values">' + "".join(annotations) + "</g>")
+        body.append('<g id="kegg-map-kit-values">' + "".join(annotations) + "</g>")
 
     body.append(_legend_svg(width, height, table, opts, vmin, vmax))
 

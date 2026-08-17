@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from kegg_svg import fetch
+from kegg_map_kit import fetch
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ def test_cache_dir_honours_override(tmp_path):
 
 def test_cache_dir_honours_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    assert fetch.cache_dir() == tmp_path / "kegg-svg"
+    assert fetch.cache_dir() == tmp_path / "kegg-map-kit"
 
 
 def test_get_ko_list_downloads_and_caches(monkeypatch, cache):

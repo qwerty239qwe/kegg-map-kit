@@ -1,6 +1,6 @@
 import pytest
 
-from kegg_svg import koinfo
+from kegg_map_kit import koinfo
 
 SAMPLE = (
     "K00001\tADH; alcohol dehydrogenase [EC:1.1.1.1]\n"

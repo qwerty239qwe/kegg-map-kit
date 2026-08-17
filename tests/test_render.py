@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from kegg_svg import intable, kgml, koinfo, render
+from kegg_map_kit import intable, kgml, koinfo, render
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -21,14 +21,14 @@ def rects(svg_text):
 def overlay_rects(svg_text):
     """Rects inside the overlay group, i.e. the coloured ones."""
     root = ET.fromstring(svg_text)
-    group = root.find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = root.find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     return group.findall(f".//{SVG}rect") if group is not None else []
 
 
 def split_rects(svg_text):
     """Split every rect into (outside the overlay group, inside it)."""
     root = ET.fromstring(svg_text)
-    group = root.find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    group = root.find(f'.//{SVG}g[@id="kegg-map-kit-overlay"]')
     inside = group.findall(f".//{SVG}rect") if group is not None else []
     seen = {id(r) for r in inside}
     outside = [r for r in root.findall(f".//{SVG}rect") if id(r) not in seen]
@@ -198,7 +198,7 @@ def test_vector_draws_relation_lines(pathway):
 
 
 def test_value_mode_colours_through_the_colormap(pathway, fake_png):
-    from kegg_svg import colormap
+    from kegg_map_kit import colormap
 
     svg, _ = render.render(
         pathway,
@@ -212,7 +212,7 @@ def test_value_mode_colours_through_the_colormap(pathway, fake_png):
 
 
 def test_explicit_vmin_vmax_are_used(pathway, fake_png):
-    from kegg_svg import colormap
+    from kegg_map_kit import colormap
 
     svg, _ = render.render(
         pathway,
@@ -346,7 +346,7 @@ def test_value_mode_renders_a_legend(pathway, fake_png):
         render.RenderOpts(mode="raster", legend=True),
         png=fake_png,
     )
-    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is not None
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-map-kit-legend"]') is not None
 
 
 def test_colour_mode_never_renders_a_legend(pathway, fake_png):
@@ -356,7 +356,7 @@ def test_colour_mode_never_renders_a_legend(pathway, fake_png):
         render.RenderOpts(mode="raster", legend=True),
         png=fake_png,
     )
-    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is None
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-map-kit-legend"]') is None
 
 
 def test_no_legend_option_suppresses_it(pathway, fake_png):
@@ -366,7 +366,7 @@ def test_no_legend_option_suppresses_it(pathway, fake_png):
         render.RenderOpts(mode="raster", legend=False),
         png=fake_png,
     )
-    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-svg-legend"]') is None
+    assert ET.fromstring(svg).find(f'.//{SVG}g[@id="kegg-map-kit-legend"]') is None
 
 
 def test_vector_label_uses_the_foreground_colour(pathway):
@@ -390,7 +390,7 @@ def test_vector_label_defaults_to_black_without_a_foreground(pathway):
 def value_labels(svg_text):
     """Text nodes inside the coefficient-annotation group."""
     root = ET.fromstring(svg_text)
-    group = root.find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    group = root.find(f'.//{SVG}g[@id="kegg-map-kit-values"]')
     return group.findall(f".//{SVG}text") if group is not None else []
 
 
@@ -518,7 +518,7 @@ def test_value_labels_stay_deterministic(pathway, fake_png):
 
 def unmapped_rects(svg_text):
     root = ET.fromstring(svg_text)
-    group = root.find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    group = root.find(f'.//{SVG}g[@id="kegg-map-kit-unmapped"]')
     return group.findall(f".//{SVG}rect") if group is not None else []
 
 
@@ -628,7 +628,7 @@ def test_no_blend_mode_by_default(pathway, fake_png):
     svg, _ = render.render(
         pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
     )
-    assert group_style(svg, "kegg-svg-overlay") is None
+    assert group_style(svg, "kegg-map-kit-overlay") is None
 
 
 def test_multiply_blend_is_applied_to_the_overlay(pathway, fake_png):
@@ -638,7 +638,7 @@ def test_multiply_blend_is_applied_to_the_overlay(pathway, fake_png):
         render.RenderOpts(mode="raster", blend="multiply"),
         png=fake_png,
     )
-    assert group_style(svg, "kegg-svg-overlay") == "mix-blend-mode:multiply"
+    assert group_style(svg, "kegg-map-kit-overlay") == "mix-blend-mode:multiply"
 
 
 def test_multiply_blend_also_covers_unmapped_boxes(pathway, fake_png):
@@ -648,7 +648,7 @@ def test_multiply_blend_also_covers_unmapped_boxes(pathway, fake_png):
         render.RenderOpts(mode="raster", blend="multiply", unmapped_color="lightgrey"),
         png=fake_png,
     )
-    assert group_style(svg, "kegg-svg-unmapped") == "mix-blend-mode:multiply"
+    assert group_style(svg, "kegg-map-kit-unmapped") == "mix-blend-mode:multiply"
 
 
 def test_value_labels_are_never_blended(pathway, fake_png):
@@ -660,7 +660,7 @@ def test_value_labels_are_never_blended(pathway, fake_png):
         render.RenderOpts(mode="raster", blend="multiply", label_values=True),
         png=fake_png,
     )
-    assert group_style(svg, "kegg-svg-values") is None
+    assert group_style(svg, "kegg-map-kit-values") is None
 
 
 def test_unknown_blend_raises(pathway, fake_png):
@@ -693,7 +693,7 @@ NAMES = {
 
 def box_labels(svg_text):
     root = ET.fromstring(svg_text)
-    group = root.find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    group = root.find(f'.//{SVG}g[@id="kegg-map-kit-boxlabels"]')
     return group.findall(f".//{SVG}text") if group is not None else []
 
 

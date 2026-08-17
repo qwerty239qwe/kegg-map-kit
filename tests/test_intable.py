@@ -2,7 +2,7 @@ import io
 
 import pytest
 
-from kegg_svg import intable
+from kegg_map_kit import intable
 
 
 def parse(text):

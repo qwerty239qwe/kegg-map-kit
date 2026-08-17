@@ -33,7 +33,7 @@ class _Parser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = _Parser(
-        prog="kegg-svg",
+        prog="kegg-map-kit",
         description="Colour a KEGG pathway map from a table of KO identifiers, as SVG.",
     )
     parser.add_argument("pathway", help="KEGG pathway id, e.g. ko00010, map00010 or 00010")
@@ -102,7 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="font size for --label-values (default: 7)",
     )
     parser.add_argument("-q", "--quiet", action="store_true")
-    parser.add_argument("--version", action="version", version=f"kegg-svg {__version__}")
+    parser.add_argument("--version", action="version", version=f"kegg-map-kit {__version__}")
     return parser
 
 
@@ -126,11 +126,11 @@ def main(argv: list[str] | None = None, stdout=None, stderr=None) -> int:
         fetch.BadImageError,
     ) as exc:
         # Must precede the bare FetchError clause: all four are subclasses.
-        print(f"kegg-svg: {exc}", file=err)
+        print(f"kegg-map-kit: {exc}", file=err)
         return EXIT_USER
     except fetch.FetchError as exc:
         # What is left is transport failure with no usable cache.
-        print(f"kegg-svg: {exc}", file=err)
+        print(f"kegg-map-kit: {exc}", file=err)
         return EXIT_NETWORK
     except (
         intable.InputError,
@@ -138,23 +138,23 @@ def main(argv: list[str] | None = None, stdout=None, stderr=None) -> int:
         render.RenderError,
         colormap.UnknownColormap,
     ) as exc:
-        print(f"kegg-svg: {exc}", file=err)
+        print(f"kegg-map-kit: {exc}", file=err)
         return EXIT_USER
     except OSError as exc:
-        print(f"kegg-svg: {exc}", file=err)
+        print(f"kegg-map-kit: {exc}", file=err)
         return EXIT_USER
 
     if not args.quiet:
         print(
-            f"kegg-svg: {stats.matched_kos}/{stats.input_kos} input KOs matched "
+            f"kegg-map-kit: {stats.matched_kos}/{stats.input_kos} input KOs matched "
             f"{stats.matched_boxes} boxes on {pathway_id}",
             file=err,
         )
         if stats.matched_kos == 0:
-            print("kegg-svg: warning: no KO matched this map; the SVG is uncoloured", file=err)
+            print("kegg-map-kit: warning: no KO matched this map; the SVG is uncoloured", file=err)
         if stats.capped_entries:
             print(
-                f"kegg-svg: warning: {stats.capped_entries} boxes needed more than "
+                f"kegg-map-kit: warning: {stats.capped_entries} boxes needed more than "
                 f"{render.MAX_SLICES} slices and were truncated",
                 file=err,
             )
