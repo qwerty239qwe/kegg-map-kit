@@ -39,9 +39,12 @@ jobs:
       # A release published from a tag that disagrees with the packaged version
       # uploads the wrong number, and PyPI will not let you reuse it.
       run: |
+        # Read it with sed rather than tomllib: this job runs on 3.10, where
+        # tomllib does not exist.
         TAG="${GITHUB_REF_NAME#v}"
-        VERSION="$(uv run python -c 'import tomllib,pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+        VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' pyproject.toml | head -1)"
         echo "tag=$TAG pyproject=$VERSION"
+        test -n "$VERSION"
         test "$TAG" = "$VERSION"
 
     - name: Run tests
