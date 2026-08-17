@@ -841,3 +841,26 @@ def test_box_labels_stay_deterministic(pathway, fake_png):
     first, _ = render.render(*args, png=fake_png, ko_names=NAMES)
     second, _ = render.render(*args, png=fake_png, ko_names=NAMES)
     assert first == second
+
+
+def test_vector_does_not_double_draw_captions_with_box_labels(pathway):
+    # Vector mode draws its own KGML caption per box; --box-labels replaces it
+    # rather than stacking a second text at the same coordinates.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="vector", box_labels="ec", unmapped_color="#dddddd"),
+        ko_names=NAMES,
+    )
+    texts = ET.fromstring(svg).findall(f".//{SVG}text")
+    positions = [(t.get("x"), t.get("y")) for t in texts]
+    assert len(positions) == len(set(positions))
+    assert "2.7.1.1" in [t.text for t in texts]
+    assert "K00844" not in [t.text for t in texts]
+
+
+def test_vector_keeps_its_own_captions_without_box_labels(pathway):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\tred\n"), render.RenderOpts(mode="vector")
+    )
+    assert "K00844" in [t.text for t in ET.fromstring(svg).findall(f".//{SVG}text")]

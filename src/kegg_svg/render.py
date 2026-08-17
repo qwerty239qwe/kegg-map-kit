@@ -155,7 +155,9 @@ def render(
 
     body.append(f'<g id="kegg-svg-overlay"{blend}>' + "".join(overlay) + "</g>")
 
-    if opts.mode == "vector":
+    # --box-labels supersedes vector's own captions; drawing both would stack
+    # two texts on identical coordinates.
+    if opts.mode == "vector" and not opts.box_labels:
         body.extend(_vector_labels(pathway, table))
 
     if opts.box_labels:
