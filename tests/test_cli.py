@@ -267,3 +267,138 @@ def test_malformed_input_with_cold_cache_exits_1_not_2(monkeypatch, tmp_path):
     )
     assert code == 1
     assert "line 2" in err
+
+
+def test_label_values_flag_annotates_the_svg(tmp_path, warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--label-values"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    assert group is not None
+    assert [t.text for t in group.findall(f".//{SVG}text")] == ["+2.00", "-1.00"]
+
+
+def test_labels_absent_without_the_flag(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]') is None
+
+
+def test_label_size_reaches_the_renderer(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--label-values", "--label-size", "12"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    assert group.findall(f".//{SVG}text")[0].get("font-size") == "12.00"
+
+
+def test_unmapped_color_greys_boxes_without_data(warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--unmapped-color", "lightgrey"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    assert group is not None
+    fills = {r.get("fill") for r in group.findall(f".//{SVG}rect")}
+    assert fills == {"lightgrey"}
+
+
+def test_no_unmapped_group_without_the_flag(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    assert ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-unmapped"]') is None
+
+
+def test_bad_unmapped_color_exits_1(warm_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--unmapped-color", "not-a-colour"]
+    )
+    assert code == 1
+    assert "--unmapped-color" in err
+
+
+def test_blend_multiply_reaches_the_svg(warm_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--blend", "multiply"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert group.get("style") == "mix-blend-mode:multiply"
+
+
+def test_default_has_no_blend(warm_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache), "--offline"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert group.get("style") is None
+
+
+@pytest.fixture
+def ko_list_cache(warm_cache):
+    (warm_cache / "ko_list.txt").write_text(
+        "K00844\tHK; hexokinase [EC:2.7.1.1]\nK01810\tGPI; isomerase [EC:5.3.1.9]\n"
+    )
+    return warm_cache
+
+
+def test_box_labels_ec_uses_kegg_own_string(ko_list_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ec"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    assert "2.7.1.1" in [t.text for t in group.findall(f".//{SVG}text")]
+
+
+def test_box_labels_imply_opaque_fill(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"1.00"}
+
+
+def test_explicit_opacity_still_wins(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko", "--opacity", "0.5"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.50"}
+
+
+def test_default_opacity_unchanged_without_box_labels(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache), "--offline"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.75"}
+
+
+def test_ko_style_needs_no_name_download(warm_cache, input_file):
+    # 'ko' labels are just the K numbers, so the catalogue is never fetched.
+    code, _, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--box-labels", "ko"]
+    )
+    assert code == 0
+
+
+def test_bad_box_label_colour_exits_1(ko_list_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko", "--box-label-color", "nope"]
+    )
+    assert code == 1
+    assert "--box-label-color" in err

@@ -16,9 +16,10 @@ import base64
 from dataclasses import dataclass
 from xml.sax.saxutils import escape, quoteattr
 
-from . import colormap, fetch, intable, kgml, legend
+from . import colormap, fetch, intable, kgml, koinfo, legend
 
 MAX_SLICES = 12
+BLEND_MODES = ("normal", "multiply")
 ENTRY_URL = "https://www.kegg.jp/entry/{ko}"
 UNMATCHED_FILL = "#ffffff"
 UNMATCHED_STROKE = "#999999"
@@ -41,6 +42,13 @@ class RenderOpts:
     cmap: str = "coolwarm"
     vmin: float | None = None
     vmax: float | None = None
+    label_values: bool = False
+    label_size: float = 7.0
+    unmapped_color: str | None = None
+    blend: str = "normal"
+    box_labels: str | None = None
+    box_label_color: str | None = None
+    box_label_size: float = 7.0
 
 
 @dataclass
@@ -62,11 +70,21 @@ def render(
     table: intable.Table,
     opts: RenderOpts,
     png: bytes | None = None,
+    ko_names: dict[str, koinfo.KoName] | None = None,
 ) -> tuple[str, Stats]:
     if opts.mode not in ("raster", "vector"):
         raise RenderError(f"unknown render mode {opts.mode!r}")
     if opts.mode == "raster" and png is None:
         raise RenderError("raster mode needs the map PNG")
+    if opts.blend not in BLEND_MODES:
+        raise RenderError(
+            f"unknown blend mode {opts.blend!r}; choose from {', '.join(BLEND_MODES)}"
+        )
+    if opts.box_labels is not None and opts.box_labels not in koinfo.STYLES:
+        raise ValueError(
+            f"unknown label style {opts.box_labels!r}; choose from {', '.join(koinfo.STYLES)}"
+        )
+    names = ko_names or {}
 
     vmin, vmax = colormap.resolve_scale(intable.values(table), opts.cmap, opts.vmin, opts.vmax)
     if opts.mode == "raster":
@@ -79,20 +97,41 @@ def render(
     matched: set[str] = set()
 
     overlay: list[str] = []
+    annotations: list[str] = []
+    unmapped: list[str] = []
+    boxlabels: list[str] = []
     coloured: set[str] = set()
+    # Entries already given a flat fill, so the vector base pass skips them.
+    painted: set[str] = set()
     for entry in pathway.entries:
         if entry.box is None:
             continue
         slices = _slices_for(entry, table, opts, vmin, vmax)
         if not slices:
+            # An ortholog box the user supplied no data for. Boxes carrying no
+            # KO at all — compounds, links to other pathways — are not "missing
+            # data" and are left as KEGG drew them.
+            if opts.unmapped_color and entry.ko_ids:
+                unmapped.append(_unmapped_svg(entry, opts))
+                painted.add(entry.id)
+                if opts.box_labels:
+                    boxlabels.append(
+                        _box_label_svg(entry, entry.ko_ids[0], opts.unmapped_color, opts, names)
+                    )
             continue
         matched.update(k for k in entry.ko_ids if k in table.rows)
         coloured.add(entry.id)
+        painted.add(entry.id)
         stats.matched_boxes += 1
         if len(slices) > MAX_SLICES:
             slices = slices[:MAX_SLICES]
             stats.capped_entries += 1
         overlay.append(_box_svg(entry, slices, table, opts))
+        if opts.box_labels:
+            labelled = next((k for k in entry.ko_ids if k in table.rows), entry.ko_ids[0])
+            boxlabels.append(_box_label_svg(entry, labelled, slices[0].fill, opts, names))
+        if opts.label_values:
+            annotations.append(_value_label_svg(entry, table, opts))
 
     stats.matched_kos = len(matched)
 
@@ -105,12 +144,27 @@ def render(
         )
     else:
         body.extend(_relation_lines(pathway))
-        body.extend(_vector_base_boxes(pathway, coloured))
+        body.extend(_vector_base_boxes(pathway, painted))
 
-    body.append('<g id="kegg-svg-overlay">' + "".join(overlay) + "</g>")
+    # Multiply keeps KEGG's baked-in gene labels legible: the white box
+    # background takes the colour, while black glyphs multiply to black.
+    blend = f' style="mix-blend-mode:{opts.blend}"' if opts.blend != "normal" else ""
 
-    if opts.mode == "vector":
+    if opts.unmapped_color:
+        body.append(f'<g id="kegg-svg-unmapped"{blend}>' + "".join(unmapped) + "</g>")
+
+    body.append(f'<g id="kegg-svg-overlay"{blend}>' + "".join(overlay) + "</g>")
+
+    # --box-labels supersedes vector's own captions; drawing both would stack
+    # two texts on identical coordinates.
+    if opts.mode == "vector" and not opts.box_labels:
         body.extend(_vector_labels(pathway, table))
+
+    if opts.box_labels:
+        body.append('<g id="kegg-svg-boxlabels">' + "".join(boxlabels) + "</g>")
+
+    if opts.label_values:
+        body.append('<g id="kegg-svg-values">' + "".join(annotations) + "</g>")
 
     body.append(_legend_svg(width, height, table, opts, vmin, vmax))
 
@@ -152,6 +206,109 @@ def _slices_for(
                     )
                 )
     return out
+
+
+def _unmapped_svg(entry: kgml.Entry, opts: RenderOpts) -> str:
+    """Flat fill over an ortholog box the input said nothing about."""
+    box = entry.box
+    assert box is not None
+    opacity = opts.opacity if opts.mode == "raster" else 1.0
+    stroke = (
+        f' stroke="{UNMATCHED_STROKE}" stroke-width="{OUTLINE_WIDTH}"'
+        if opts.mode == "vector"
+        else ""
+    )
+    tip = escape(f"{entry.label or ','.join(entry.ko_ids)} — no data")
+    return (
+        f"<g><title>{tip}</title>"
+        f'<rect x="{_n(box.x)}" y="{_n(box.y)}" width="{_n(box.w)}" height="{_n(box.h)}" '
+        f"fill={quoteattr(opts.unmapped_color or '')} fill-opacity=\"{opacity:.2f}\"{stroke}/>"
+        "</g>"
+    )
+
+
+def _contrast_for(fill: str) -> str:
+    """Black or white, whichever stays readable on `fill`.
+
+    Only hex fills can be measured; a named colour falls back to black, which is
+    what KEGG itself defaults to.
+    """
+    if not (fill.startswith("#") and len(fill) == 7):
+        return "#000000"
+    r, g, b = (int(fill[i : i + 2], 16) for i in (1, 3, 5))
+    return "#ffffff" if (0.2126 * r + 0.7152 * g + 0.0722 * b) < 140 else "#000000"
+
+
+def _box_label_svg(
+    entry: kgml.Entry,
+    ko: str,
+    fill: str,
+    opts: RenderOpts,
+    names: dict[str, koinfo.KoName],
+) -> str:
+    """Redraw the box's own caption on top of an opaque fill.
+
+    KEGG bakes the caption into the map PNG, so painting a box hides it. Drawing
+    it again as real text is what keeps the box readable at any fill darkness --
+    and with the `ec` style it reproduces the string KEGG itself prints there.
+    """
+    box = entry.box
+    assert box is not None
+    text = koinfo.label_for(ko, names, opts.box_labels or "ko")
+
+    # Rough advance width for a sans-serif digit/letter run; shrink to fit
+    # rather than letting a long symbol spill over the neighbouring boxes.
+    size = opts.box_label_size
+    budget = box.w - 3.0
+    if text and size * 0.55 * len(text) > budget:
+        size = max(3.5, budget / (0.55 * len(text)))
+
+    colour = opts.box_label_color or _contrast_for(fill)
+    return (
+        f'<text x="{_n(box.x + box.w / 2)}" y="{_n(box.y + box.h / 2)}" '
+        f'text-anchor="middle" dominant-baseline="central" '
+        f'font-family="sans-serif" font-size="{_n(size)}" fill={quoteattr(colour)}>'
+        f"{escape(text)}</text>"
+    )
+
+
+def _value_lines(entry: kgml.Entry, table: intable.Table) -> list[str]:
+    """One formatted line per matched KO, in KGML order, so line N reads against
+    slice N of the box. A KO measured across several columns keeps its values on
+    a single line rather than pushing the stack taller than the box it labels."""
+    if table.mode != "value":
+        return []
+    lines = []
+    for ko in entry.ko_ids:
+        row = table.rows.get(ko)
+        if row is None:
+            continue
+        cells = [f"{float(c):+.2f}" for c in row if c is not None]
+        if cells:
+            lines.append(", ".join(cells))
+    return lines
+
+
+def _value_label_svg(entry: kgml.Entry, table: intable.Table, opts: RenderOpts) -> str:
+    box = entry.box
+    assert box is not None
+    lines = _value_lines(entry, table)
+    if not lines:
+        return ""
+
+    # Stacked under the box: KEGG packs boxes side by side far more often than
+    # it stacks them, so below collides least. The white halo is painted first
+    # (paint-order) so the digits stay readable over map artwork.
+    cx = box.x + box.w / 2
+    top = box.y + box.h + opts.label_size
+    step = opts.label_size * 1.15
+    return "".join(
+        f'<text x="{_n(cx)}" y="{_n(top + i * step)}" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="{_n(opts.label_size)}" '
+        f'fill="#000000" stroke="#ffffff" stroke-width="{_n(opts.label_size / 4)}" '
+        f'paint-order="stroke">{escape(line)}</text>'
+        for i, line in enumerate(lines)
+    )
 
 
 def _box_svg(

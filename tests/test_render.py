@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from kegg_svg import intable, kgml, render
+from kegg_svg import intable, kgml, koinfo, render
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -385,3 +385,482 @@ def test_vector_label_defaults_to_black_without_a_foreground(pathway):
     )
     labels = {t.text: t.get("fill") for t in ET.fromstring(svg).findall(f".//{SVG}text")}
     assert labels["K00844"] == "#000000"
+
+
+def value_labels(svg_text):
+    """Text nodes inside the coefficient-annotation group."""
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-values"]')
+    return group.findall(f".//{SVG}text") if group is not None else []
+
+
+def test_no_value_labels_unless_requested(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t0.7\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert value_labels(svg) == []
+
+
+def test_value_label_sits_below_its_box_and_is_signed(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    labels = value_labels(svg)
+    assert len(labels) == 1
+    assert labels[0].text == "+0.70"
+    # Fixture entry 1 box is top-left (714.0, 171.5), 46 x 17.
+    assert float(labels[0].get("x")) == pytest.approx(714.0 + 46 / 2)
+    assert float(labels[0].get("y")) > 171.5 + 17
+    assert labels[0].get("text-anchor") == "middle"
+
+
+def test_negative_values_keep_their_sign(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t-0.33\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert value_labels(svg)[0].text == "-0.33"
+
+
+def test_one_label_line_per_matched_ko_in_slice_order(pathway, fake_png):
+    # Fixture entry 2 lists K01810, K06859, K13810. Two are supplied, so the
+    # box gets two stacked lines in KGML order, matching its two colour slices.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K13810\t-0.40\nK01810\t0.90\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    labels = value_labels(svg)
+    assert [t.text for t in labels] == ["+0.90", "-0.40"]
+    assert float(labels[0].get("y")) < float(labels[1].get("y"))
+    assert labels[0].get("x") == labels[1].get("x")
+
+
+def test_multi_column_values_join_on_one_line_per_ko(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\t-0.2\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70, -0.20"]
+
+
+def test_colour_mode_has_no_value_labels(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\tred\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    assert value_labels(svg) == []
+
+
+def test_na_cells_are_skipped_within_a_label_line(pathway, fake_png):
+    # intable rejects a row with no data at all, so an all-NA KO cannot exist;
+    # the reachable case is a KO measured in some columns and not others.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\t\nK00845\t0.1\t0.2\n"),
+        render.RenderOpts(mode="raster", label_values=True, na_color="#cccccc"),
+        png=fake_png,
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70", "+0.10, +0.20"]
+
+
+def test_value_labels_carry_a_halo_for_legibility(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+        png=fake_png,
+    )
+    label = value_labels(svg)[0]
+    assert label.get("stroke") == "#ffffff"
+    assert label.get("paint-order") == "stroke"
+
+
+def test_label_size_is_configurable(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="raster", label_values=True, label_size=11.0),
+        png=fake_png,
+    )
+    assert value_labels(svg)[0].get("font-size") == "11.00"
+
+
+def test_value_labels_work_in_vector_mode_too(pathway):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t0.7\n"),
+        render.RenderOpts(mode="vector", label_values=True),
+    )
+    assert [t.text for t in value_labels(svg)] == ["+0.70"]
+
+
+def test_value_labels_stay_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t0.7\nK01810\t-0.3\n"),
+        render.RenderOpts(mode="raster", label_values=True),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second
+
+
+def unmapped_rects(svg_text):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-unmapped"]')
+    return group.findall(f".//{SVG}rect") if group is not None else []
+
+
+def test_no_unmapped_group_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert unmapped_rects(svg) == []
+
+
+def test_unmapped_boxes_get_the_colour(pathway, fake_png):
+    # Fixture rectangles carry K00844 (entry 1), K01810/K06859/K13810 (entry 2)
+    # and K00845 (entry 5). Supplying only K00844 leaves two boxes unmapped.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    found = unmapped_rects(svg)
+    assert len(found) == 2
+    assert {r.get("fill") for r in found} == {"#dddddd"}
+    # Entry 2 at centre x=551 w=46 -> left edge 528; entry 5 at 200 -> 177.
+    assert sorted(r.get("x") for r in found) == ["177.00", "528.00"]
+
+
+def test_mapped_boxes_are_not_in_the_unmapped_group(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    assert "714.00" not in [r.get("x") for r in unmapped_rects(svg)]
+    assert overlay_rects(svg)[0].get("x") == "714.00"
+
+
+def test_boxes_without_any_ko_are_left_alone(fake_png):
+    # A rectangle that is not an ortholog entry carries no KO, so "no data" is
+    # not meaningful for it and it must not be greyed out.
+    text = (
+        '<?xml version="1.0"?><pathway name="path:ko1" title="t">'
+        '<entry id="1" name="ko:K00001" type="ortholog" link="x">'
+        '<graphics name="a" type="rectangle" x="50" y="50" width="40" height="20"/></entry>'
+        '<entry id="2" name="undefined" type="other" link="x">'
+        '<graphics name="b" type="rectangle" x="150" y="50" width="40" height="20"/></entry>'
+        "</pathway>"
+    )
+    svg, _ = render.render(
+        kgml.parse(text),
+        parse_table("K00002\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    found = unmapped_rects(svg)
+    assert len(found) == 1
+    assert found[0].get("x") == "30.00"
+
+
+def test_unmapped_uses_overlay_opacity_in_raster_and_none_in_vector(pathway, fake_png):
+    raster, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd", opacity=0.5),
+        png=fake_png,
+    )
+    assert unmapped_rects(raster)[0].get("fill-opacity") == "0.50"
+    vector, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="vector", unmapped_color="#dddddd", opacity=0.5),
+    )
+    found = unmapped_rects(vector)
+    assert found[0].get("fill-opacity") == "1.00"
+    assert found[0].get("stroke") == "#999999"
+
+
+def test_unmapped_colour_is_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", unmapped_color="#dddddd"),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second
+
+
+def test_vector_unmapped_boxes_are_painted_once(pathway):
+    # The grey fill replaces the neutral base rather than stacking on top of it.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\tred\n"),
+        render.RenderOpts(mode="vector", unmapped_color="#dddddd"),
+    )
+    xs = [r.get("x") for r in ET.fromstring(svg).findall(f".//{SVG}rect")]
+    assert sorted(xs) == ["177.00", "528.00", "714.00", "714.00"]  # +1 outline on the matched box
+
+
+def group_style(svg_text, group_id):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="{group_id}"]')
+    return None if group is None else group.get("style")
+
+
+def test_no_blend_mode_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert group_style(svg, "kegg-svg-overlay") is None
+
+
+def test_multiply_blend_is_applied_to_the_overlay(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply"),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-overlay") == "mix-blend-mode:multiply"
+
+
+def test_multiply_blend_also_covers_unmapped_boxes(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply", unmapped_color="lightgrey"),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-unmapped") == "mix-blend-mode:multiply"
+
+
+def test_value_labels_are_never_blended(pathway, fake_png):
+    # Multiply would erase the white halo (white x anything = anything), so the
+    # annotation layer must keep normal compositing.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply", label_values=True),
+        png=fake_png,
+    )
+    assert group_style(svg, "kegg-svg-values") is None
+
+
+def test_unknown_blend_raises(pathway, fake_png):
+    with pytest.raises(render.RenderError):
+        render.render(
+            pathway,
+            parse_table("K00844\t1.0\n"),
+            render.RenderOpts(mode="raster", blend="screen"),
+            png=fake_png,
+        )
+
+
+def test_blend_stays_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", blend="multiply"),
+    )
+    first, _ = render.render(*args, png=fake_png)
+    second, _ = render.render(*args, png=fake_png)
+    assert first == second
+
+
+NAMES = {
+    "K00844": koinfo.KoName(symbol="HK", name="hexokinase", ec="2.7.1.1"),
+    "K01810": koinfo.KoName(symbol="GPI", name="glucose-6-phosphate isomerase", ec="5.3.1.9"),
+    "K00845": koinfo.KoName(symbol="glk", name="glucokinase", ec="2.7.1.2"),
+}
+
+
+def box_labels(svg_text):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    return group.findall(f".//{SVG}text") if group is not None else []
+
+
+def test_no_box_labels_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert box_labels(svg) == []
+
+
+def test_box_label_is_centred_in_its_box(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    label = box_labels(svg)[0]
+    assert label.text == "K00844"
+    assert float(label.get("x")) == pytest.approx(714.0 + 46 / 2)
+    assert float(label.get("y")) == pytest.approx(171.5 + 17 / 2)
+    assert label.get("text-anchor") == "middle"
+    assert label.get("dominant-baseline") == "central"
+
+
+def test_ec_style_uses_the_ec_number(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ec"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    assert box_labels(svg)[0].text == "2.7.1.1"
+
+
+def test_symbol_style_uses_the_gene_symbol(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    assert box_labels(svg)[0].text == "HK"
+
+
+def test_label_falls_back_to_the_ko_id_without_name_data(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ec"),
+        png=fake_png,
+    )
+    assert box_labels(svg)[0].text == "K00844"
+
+
+def test_dark_fill_gets_light_text_and_light_fill_gets_dark_text(pathway, fake_png):
+    dark, _ = render.render(
+        pathway,
+        parse_table("K00844\t#101060\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+    )
+    light, _ = render.render(
+        pathway,
+        parse_table("K00844\t#ffe0e0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+    )
+    assert box_labels(dark)[0].get("fill") == "#ffffff"
+    assert box_labels(light)[0].get("fill") == "#000000"
+
+
+def test_explicit_label_colour_overrides_the_auto_contrast(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t#101060\n"),
+        render.RenderOpts(mode="raster", box_labels="ko", box_label_color="#00ff00"),
+        png=fake_png,
+    )
+    assert box_labels(svg)[0].get("fill") == "#00ff00"
+
+
+def test_long_labels_shrink_to_fit_the_box(pathway, fake_png):
+    names = {"K00844": koinfo.KoName(symbol="averyverylongsymbolindeed", name="x", ec=None)}
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol", box_label_size=7.0),
+        png=fake_png,
+        ko_names=names,
+    )
+    assert float(box_labels(svg)[0].get("font-size")) < 7.0
+
+
+def test_unmapped_boxes_are_relabelled_too(pathway, fake_png):
+    # An opaque grey fill hides KEGG's own text, so those boxes need a label
+    # as much as the coloured ones do.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    assert sorted(t.text for t in box_labels(svg)) == ["K00844", "K00845", "K01810"]
+
+
+def test_box_labels_are_escaped(fake_png):
+    text = (
+        '<?xml version="1.0"?><pathway name="path:ko1" title="t">'
+        '<entry id="1" name="ko:K00001" type="ortholog" link="x">'
+        '<graphics name="a" type="rectangle" x="50" y="50" width="40" height="20"/></entry>'
+        "</pathway>"
+    )
+    names = {"K00001": koinfo.KoName(symbol="a&b", name="x", ec=None)}
+    svg, _ = render.render(
+        kgml.parse(text),
+        parse_table("K00001\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol"),
+        png=fake_png,
+        ko_names=names,
+    )
+    ET.fromstring(svg)
+    assert box_labels(svg)[0].text == "a&b"
+
+
+def test_unknown_label_style_raises(pathway, fake_png):
+    with pytest.raises(ValueError):
+        render.render(
+            pathway,
+            parse_table("K00844\t1.0\n"),
+            render.RenderOpts(mode="raster", box_labels="nonsense"),
+            png=fake_png,
+        )
+
+
+def test_box_labels_stay_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\nK01810\t-0.5\n"),
+        render.RenderOpts(mode="raster", box_labels="ec", unmapped_color="#dddddd"),
+    )
+    first, _ = render.render(*args, png=fake_png, ko_names=NAMES)
+    second, _ = render.render(*args, png=fake_png, ko_names=NAMES)
+    assert first == second
+
+
+def test_vector_does_not_double_draw_captions_with_box_labels(pathway):
+    # Vector mode draws its own KGML caption per box; --box-labels replaces it
+    # rather than stacking a second text at the same coordinates.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="vector", box_labels="ec", unmapped_color="#dddddd"),
+        ko_names=NAMES,
+    )
+    texts = ET.fromstring(svg).findall(f".//{SVG}text")
+    positions = [(t.get("x"), t.get("y")) for t in texts]
+    assert len(positions) == len(set(positions))
+    assert "2.7.1.1" in [t.text for t in texts]
+    assert "K00844" not in [t.text for t in texts]
+
+
+def test_vector_keeps_its_own_captions_without_box_labels(pathway):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\tred\n"), render.RenderOpts(mode="vector")
+    )
+    assert "K00844" in [t.text for t in ET.fromstring(svg).findall(f".//{SVG}text")]
