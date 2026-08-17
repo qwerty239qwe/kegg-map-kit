@@ -150,3 +150,25 @@ def test_cache_dir_honours_override(tmp_path):
 def test_cache_dir_honours_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     assert fetch.cache_dir() == tmp_path / "kegg-svg"
+
+
+def test_get_ko_list_downloads_and_caches(monkeypatch, cache):
+    calls = install_fake(monkeypatch, payload=b"K00001\tADH; x [EC:1.1.1.1]\n")
+    text = fetch.get_ko_list(cache)
+    assert text.startswith("K00001")
+    assert (cache / "ko_list.txt").read_text().startswith("K00001")
+    assert calls == ["https://rest.kegg.jp/list/ko"]
+
+
+def test_ko_list_is_served_from_cache(monkeypatch, cache):
+    install_fake(monkeypatch, payload=b"K00001\tADH; x\n")
+    fetch.get_ko_list(cache)
+    calls = install_fake(monkeypatch, payload=b"SHOULD NOT BE USED")
+    assert fetch.get_ko_list(cache).startswith("K00001")
+    assert calls == []
+
+
+def test_ko_list_offline_miss_raises(monkeypatch, cache):
+    install_fake(monkeypatch)
+    with pytest.raises(fetch.OfflineError):
+        fetch.get_ko_list(cache, offline=True)

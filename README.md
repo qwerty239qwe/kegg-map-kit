@@ -48,6 +48,9 @@ slices (up to 12).
 | `--kgml` / `--png` | — | Use local files instead of fetching |
 | `--na-color COLOR` | — | Fill for blank cells; blank cells are skipped by default |
 | `--unmapped-color COLOR` | — | Fill for KO boxes the input has no data for. Boxes carrying no KO at all (compounds, links to other maps) are left as KEGG drew them |
+| `--box-labels ko\|symbol\|ec` | — | Repaint each box's caption on top of the fill, so an opaque colour stays readable. `ec` reproduces the string KEGG itself prints in the box. Implies `--opacity 1.0` |
+| `--box-label-color`, `--box-label-size` | auto, `7` | Box label colour (default: auto black/white by fill darkness) and font size |
+| `--blend normal\|multiply` | `normal` | `multiply` keeps KEGG's own captions legible under a translucent fill |
 | `--label-values` | off | Print each value beneath its box. Value input only |
 | `--label-size` | `7` | Font size for `--label-values` |
 | `--no-legend`, `--no-links` | — | Suppress the colorbar / the links to KEGG |

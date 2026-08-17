@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from kegg_svg import intable, kgml, render
+from kegg_svg import intable, kgml, koinfo, render
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -681,4 +681,163 @@ def test_blend_stays_deterministic(pathway, fake_png):
     )
     first, _ = render.render(*args, png=fake_png)
     second, _ = render.render(*args, png=fake_png)
+    assert first == second
+
+
+NAMES = {
+    "K00844": koinfo.KoName(symbol="HK", name="hexokinase", ec="2.7.1.1"),
+    "K01810": koinfo.KoName(symbol="GPI", name="glucose-6-phosphate isomerase", ec="5.3.1.9"),
+    "K00845": koinfo.KoName(symbol="glk", name="glucokinase", ec="2.7.1.2"),
+}
+
+
+def box_labels(svg_text):
+    root = ET.fromstring(svg_text)
+    group = root.find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    return group.findall(f".//{SVG}text") if group is not None else []
+
+
+def test_no_box_labels_by_default(pathway, fake_png):
+    svg, _ = render.render(
+        pathway, parse_table("K00844\t1.0\n"), render.RenderOpts(mode="raster"), png=fake_png
+    )
+    assert box_labels(svg) == []
+
+
+def test_box_label_is_centred_in_its_box(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    label = box_labels(svg)[0]
+    assert label.text == "K00844"
+    assert float(label.get("x")) == pytest.approx(714.0 + 46 / 2)
+    assert float(label.get("y")) == pytest.approx(171.5 + 17 / 2)
+    assert label.get("text-anchor") == "middle"
+    assert label.get("dominant-baseline") == "central"
+
+
+def test_ec_style_uses_the_ec_number(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ec"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    assert box_labels(svg)[0].text == "2.7.1.1"
+
+
+def test_symbol_style_uses_the_gene_symbol(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol"),
+        png=fake_png,
+        ko_names=NAMES,
+    )
+    assert box_labels(svg)[0].text == "HK"
+
+
+def test_label_falls_back_to_the_ko_id_without_name_data(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ec"),
+        png=fake_png,
+    )
+    assert box_labels(svg)[0].text == "K00844"
+
+
+def test_dark_fill_gets_light_text_and_light_fill_gets_dark_text(pathway, fake_png):
+    dark, _ = render.render(
+        pathway,
+        parse_table("K00844\t#101060\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+    )
+    light, _ = render.render(
+        pathway,
+        parse_table("K00844\t#ffe0e0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko"),
+        png=fake_png,
+    )
+    assert box_labels(dark)[0].get("fill") == "#ffffff"
+    assert box_labels(light)[0].get("fill") == "#000000"
+
+
+def test_explicit_label_colour_overrides_the_auto_contrast(pathway, fake_png):
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t#101060\n"),
+        render.RenderOpts(mode="raster", box_labels="ko", box_label_color="#00ff00"),
+        png=fake_png,
+    )
+    assert box_labels(svg)[0].get("fill") == "#00ff00"
+
+
+def test_long_labels_shrink_to_fit_the_box(pathway, fake_png):
+    names = {"K00844": koinfo.KoName(symbol="averyverylongsymbolindeed", name="x", ec=None)}
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol", box_label_size=7.0),
+        png=fake_png,
+        ko_names=names,
+    )
+    assert float(box_labels(svg)[0].get("font-size")) < 7.0
+
+
+def test_unmapped_boxes_are_relabelled_too(pathway, fake_png):
+    # An opaque grey fill hides KEGG's own text, so those boxes need a label
+    # as much as the coloured ones do.
+    svg, _ = render.render(
+        pathway,
+        parse_table("K00844\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="ko", unmapped_color="#dddddd"),
+        png=fake_png,
+    )
+    assert sorted(t.text for t in box_labels(svg)) == ["K00844", "K00845", "K01810"]
+
+
+def test_box_labels_are_escaped(fake_png):
+    text = (
+        '<?xml version="1.0"?><pathway name="path:ko1" title="t">'
+        '<entry id="1" name="ko:K00001" type="ortholog" link="x">'
+        '<graphics name="a" type="rectangle" x="50" y="50" width="40" height="20"/></entry>'
+        "</pathway>"
+    )
+    names = {"K00001": koinfo.KoName(symbol="a&b", name="x", ec=None)}
+    svg, _ = render.render(
+        kgml.parse(text),
+        parse_table("K00001\t1.0\n"),
+        render.RenderOpts(mode="raster", box_labels="symbol"),
+        png=fake_png,
+        ko_names=names,
+    )
+    ET.fromstring(svg)
+    assert box_labels(svg)[0].text == "a&b"
+
+
+def test_unknown_label_style_raises(pathway, fake_png):
+    with pytest.raises(ValueError):
+        render.render(
+            pathway,
+            parse_table("K00844\t1.0\n"),
+            render.RenderOpts(mode="raster", box_labels="nonsense"),
+            png=fake_png,
+        )
+
+
+def test_box_labels_stay_deterministic(pathway, fake_png):
+    args = (
+        pathway,
+        parse_table("K00844\t1.0\nK01810\t-0.5\n"),
+        render.RenderOpts(mode="raster", box_labels="ec", unmapped_color="#dddddd"),
+    )
+    first, _ = render.render(*args, png=fake_png, ko_names=NAMES)
+    second, _ = render.render(*args, png=fake_png, ko_names=NAMES)
     assert first == second

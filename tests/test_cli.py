@@ -340,3 +340,65 @@ def test_default_has_no_blend(warm_cache, input_file):
     )
     group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
     assert group.get("style") is None
+
+
+@pytest.fixture
+def ko_list_cache(warm_cache):
+    (warm_cache / "ko_list.txt").write_text(
+        "K00844\tHK; hexokinase [EC:2.7.1.1]\nK01810\tGPI; isomerase [EC:5.3.1.9]\n"
+    )
+    return warm_cache
+
+
+def test_box_labels_ec_uses_kegg_own_string(ko_list_cache, input_file):
+    code, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ec"]
+    )
+    assert code == 0
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-boxlabels"]')
+    assert "2.7.1.1" in [t.text for t in group.findall(f".//{SVG}text")]
+
+
+def test_box_labels_imply_opaque_fill(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"1.00"}
+
+
+def test_explicit_opacity_still_wins(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko", "--opacity", "0.5"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.50"}
+
+
+def test_default_opacity_unchanged_without_box_labels(ko_list_cache, input_file):
+    _, out, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache), "--offline"]
+    )
+    group = ET.fromstring(out).find(f'.//{SVG}g[@id="kegg-svg-overlay"]')
+    assert {r.get("fill-opacity") for r in group.findall(f".//{SVG}rect")} == {"0.75"}
+
+
+def test_ko_style_needs_no_name_download(warm_cache, input_file):
+    # 'ko' labels are just the K numbers, so the catalogue is never fetched.
+    code, _, _ = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(warm_cache),
+         "--offline", "--box-labels", "ko"]
+    )
+    assert code == 0
+
+
+def test_bad_box_label_colour_exits_1(ko_list_cache, input_file):
+    code, _, err = invoke(
+        ["ko00010", "-i", str(input_file), "-o", "-", "--cache", str(ko_list_cache),
+         "--offline", "--box-labels", "ko", "--box-label-color", "nope"]
+    )
+    assert code == 1
+    assert "--box-label-color" in err

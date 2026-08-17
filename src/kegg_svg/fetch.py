@@ -18,6 +18,7 @@ from . import __version__
 
 KGML_URL = "https://rest.kegg.jp/get/{pathway}/kgml"
 PNG_URL = "https://www.kegg.jp/kegg/pathway/ko/{pathway}.png"
+KO_LIST_URL = "https://rest.kegg.jp/list/ko"
 USER_AGENT = f"kegg-svg/{__version__} (+https://pypi.org/project/kegg-svg/)"
 TIMEOUT = 30
 PATHWAY_RE = re.compile(r"^(?:path:)?(?:ko|map)?(\d{5})$", re.IGNORECASE)
@@ -73,6 +74,11 @@ def cache_dir(override: str | None = None) -> Path:
 def get_kgml(pathway: str, cache: Path, offline: bool = False) -> str:
     data = _get(KGML_URL.format(pathway=pathway), cache / f"{pathway}.kgml", offline)
     return data.decode("utf-8", errors="replace")
+
+
+def get_ko_list(cache: Path, offline: bool = False) -> str:
+    """The whole KO catalogue, ~28k lines. One fetch, cached indefinitely."""
+    return _get(KO_LIST_URL, cache / "ko_list.txt", offline).decode("utf-8", errors="replace")
 
 
 def get_map_png(pathway: str, cache: Path, offline: bool = False) -> bytes:

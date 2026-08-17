@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-from . import __version__, colormap, fetch, intable, kgml, render
+from . import __version__, colormap, fetch, intable, kgml, koinfo, render
 
 EXIT_OK = 0
 EXIT_USER = 1
@@ -50,7 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--vmin", type=float, default=None)
     parser.add_argument("--vmax", type=float, default=None)
-    parser.add_argument("--opacity", type=float, default=0.75)
+    # Sentinel default: --box-labels implies an opaque fill, since the labels it
+    # redraws are the ones the fill hides.
+    parser.add_argument("--opacity", type=float, default=None)
     parser.add_argument("--offline", action="store_true", help="never use the network")
     parser.add_argument("--cache", default=None, help="cache directory")
     parser.add_argument("--kgml", default=None, help="use this KGML file instead of fetching")
@@ -58,6 +60,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-legend", dest="legend", action="store_false")
     parser.add_argument("--no-links", dest="links", action="store_false")
     parser.add_argument("--na-color", default=None, help="fill for cells with no value")
+    parser.add_argument(
+        "--box-labels",
+        choices=koinfo.STYLES,
+        default=None,
+        help=(
+            "redraw each box's caption on top of the fill: 'ec' reproduces the "
+            "string KEGG prints there, 'symbol' the gene symbol, 'ko' the K number. "
+            "Implies --opacity 1.0 unless you set it"
+        ),
+    )
+    parser.add_argument(
+        "--box-label-color", default=None, help="box label colour (default: auto black/white)"
+    )
+    parser.add_argument(
+        "--box-label-size", type=float, default=7.0, help="box label font size (default: 7)"
+    )
     parser.add_argument(
         "--blend",
         choices=render.BLEND_MODES,
@@ -150,6 +168,8 @@ def _build(args) -> tuple[str, render.Stats, str]:
 
     if args.na_color is not None and not intable.is_color(args.na_color):
         raise intable.InputError(f"--na-color {args.na_color!r} is not a colour")
+    if args.box_label_color is not None and not intable.is_color(args.box_label_color):
+        raise intable.InputError(f"--box-label-color {args.box_label_color!r} is not a colour")
     if args.unmapped_color is not None and not intable.is_color(args.unmapped_color):
         raise intable.InputError(f"--unmapped-color {args.unmapped_color!r} is not a colour")
 
@@ -178,9 +198,17 @@ def _build(args) -> tuple[str, render.Stats, str]:
         else:
             png = fetch.get_map_png(pathway_id, cache, args.offline)
 
+    ko_names = {}
+    if args.box_labels in ("symbol", "ec"):
+        ko_names = koinfo.parse(fetch.get_ko_list(cache, args.offline))
+
+    opacity = args.opacity
+    if opacity is None:
+        opacity = 1.0 if args.box_labels else 0.75
+
     opts = render.RenderOpts(
         mode=args.mode,
-        opacity=args.opacity,
+        opacity=opacity,
         links=args.links,
         legend=args.legend,
         na_color=args.na_color,
@@ -191,8 +219,11 @@ def _build(args) -> tuple[str, render.Stats, str]:
         label_size=args.label_size,
         unmapped_color=args.unmapped_color,
         blend=args.blend,
+        box_labels=args.box_labels,
+        box_label_color=args.box_label_color,
+        box_label_size=args.box_label_size,
     )
-    svg, stats = render.render(pathway, table, opts, png=png)
+    svg, stats = render.render(pathway, table, opts, png=png, ko_names=ko_names)
     return svg, stats, pathway_id
 
 

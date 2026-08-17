@@ -16,7 +16,7 @@ import base64
 from dataclasses import dataclass
 from xml.sax.saxutils import escape, quoteattr
 
-from . import colormap, fetch, intable, kgml, legend
+from . import colormap, fetch, intable, kgml, koinfo, legend
 
 MAX_SLICES = 12
 BLEND_MODES = ("normal", "multiply")
@@ -46,6 +46,9 @@ class RenderOpts:
     label_size: float = 7.0
     unmapped_color: str | None = None
     blend: str = "normal"
+    box_labels: str | None = None
+    box_label_color: str | None = None
+    box_label_size: float = 7.0
 
 
 @dataclass
@@ -67,6 +70,7 @@ def render(
     table: intable.Table,
     opts: RenderOpts,
     png: bytes | None = None,
+    ko_names: dict[str, koinfo.KoName] | None = None,
 ) -> tuple[str, Stats]:
     if opts.mode not in ("raster", "vector"):
         raise RenderError(f"unknown render mode {opts.mode!r}")
@@ -76,6 +80,11 @@ def render(
         raise RenderError(
             f"unknown blend mode {opts.blend!r}; choose from {', '.join(BLEND_MODES)}"
         )
+    if opts.box_labels is not None and opts.box_labels not in koinfo.STYLES:
+        raise ValueError(
+            f"unknown label style {opts.box_labels!r}; choose from {', '.join(koinfo.STYLES)}"
+        )
+    names = ko_names or {}
 
     vmin, vmax = colormap.resolve_scale(intable.values(table), opts.cmap, opts.vmin, opts.vmax)
     if opts.mode == "raster":
@@ -90,6 +99,7 @@ def render(
     overlay: list[str] = []
     annotations: list[str] = []
     unmapped: list[str] = []
+    boxlabels: list[str] = []
     coloured: set[str] = set()
     # Entries already given a flat fill, so the vector base pass skips them.
     painted: set[str] = set()
@@ -104,6 +114,10 @@ def render(
             if opts.unmapped_color and entry.ko_ids:
                 unmapped.append(_unmapped_svg(entry, opts))
                 painted.add(entry.id)
+                if opts.box_labels:
+                    boxlabels.append(
+                        _box_label_svg(entry, entry.ko_ids[0], opts.unmapped_color, opts, names)
+                    )
             continue
         matched.update(k for k in entry.ko_ids if k in table.rows)
         coloured.add(entry.id)
@@ -113,6 +127,9 @@ def render(
             slices = slices[:MAX_SLICES]
             stats.capped_entries += 1
         overlay.append(_box_svg(entry, slices, table, opts))
+        if opts.box_labels:
+            labelled = next((k for k in entry.ko_ids if k in table.rows), entry.ko_ids[0])
+            boxlabels.append(_box_label_svg(entry, labelled, slices[0].fill, opts, names))
         if opts.label_values:
             annotations.append(_value_label_svg(entry, table, opts))
 
@@ -140,6 +157,9 @@ def render(
 
     if opts.mode == "vector":
         body.extend(_vector_labels(pathway, table))
+
+    if opts.box_labels:
+        body.append('<g id="kegg-svg-boxlabels">' + "".join(boxlabels) + "</g>")
 
     if opts.label_values:
         body.append('<g id="kegg-svg-values">' + "".join(annotations) + "</g>")
@@ -202,6 +222,51 @@ def _unmapped_svg(entry: kgml.Entry, opts: RenderOpts) -> str:
         f'<rect x="{_n(box.x)}" y="{_n(box.y)}" width="{_n(box.w)}" height="{_n(box.h)}" '
         f"fill={quoteattr(opts.unmapped_color or '')} fill-opacity=\"{opacity:.2f}\"{stroke}/>"
         "</g>"
+    )
+
+
+def _contrast_for(fill: str) -> str:
+    """Black or white, whichever stays readable on `fill`.
+
+    Only hex fills can be measured; a named colour falls back to black, which is
+    what KEGG itself defaults to.
+    """
+    if not (fill.startswith("#") and len(fill) == 7):
+        return "#000000"
+    r, g, b = (int(fill[i : i + 2], 16) for i in (1, 3, 5))
+    return "#ffffff" if (0.2126 * r + 0.7152 * g + 0.0722 * b) < 140 else "#000000"
+
+
+def _box_label_svg(
+    entry: kgml.Entry,
+    ko: str,
+    fill: str,
+    opts: RenderOpts,
+    names: dict[str, koinfo.KoName],
+) -> str:
+    """Redraw the box's own caption on top of an opaque fill.
+
+    KEGG bakes the caption into the map PNG, so painting a box hides it. Drawing
+    it again as real text is what keeps the box readable at any fill darkness --
+    and with the `ec` style it reproduces the string KEGG itself prints there.
+    """
+    box = entry.box
+    assert box is not None
+    text = koinfo.label_for(ko, names, opts.box_labels or "ko")
+
+    # Rough advance width for a sans-serif digit/letter run; shrink to fit
+    # rather than letting a long symbol spill over the neighbouring boxes.
+    size = opts.box_label_size
+    budget = box.w - 3.0
+    if text and size * 0.55 * len(text) > budget:
+        size = max(3.5, budget / (0.55 * len(text)))
+
+    colour = opts.box_label_color or _contrast_for(fill)
+    return (
+        f'<text x="{_n(box.x + box.w / 2)}" y="{_n(box.y + box.h / 2)}" '
+        f'text-anchor="middle" dominant-baseline="central" '
+        f'font-family="sans-serif" font-size="{_n(size)}" fill={quoteattr(colour)}>'
+        f"{escape(text)}</text>"
     )
 
 
