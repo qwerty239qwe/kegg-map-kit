@@ -31,7 +31,9 @@ jobs:
       run: uv python install 3.10
 
     - name: Install dependencies
-      run: uv sync
+      # --extra dev: pytest and ruff live in [project.optional-dependencies],
+      # which a bare `uv sync` prunes.
+      run: uv sync --extra dev
 
     - name: Check the release tag matches the version in pyproject.toml
       # A release published from a tag that disagrees with the packaged version
